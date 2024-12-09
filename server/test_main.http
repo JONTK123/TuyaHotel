@@ -1,0 +1,34 @@
+GET http://127.0.0.1:8000/
+Accept: application/json
+###
+
+GET http://127.0.0.1:8000/vdevo173316521541939/properties
+Accept: application/json
+###
+
+POST http://127.0.0.1:8000/devices/vdevo173316521541939/freeze
+Content-Type: application/json
+Accept: application/json
+###
+
+POST http://127.0.0.1:8000/devices/vdevo173316521541939/unfreeze
+Content-Type: application/json
+Accept: application/json
+###
+
+PUT http://127.0.0.1:8000/devices/vdevo173316521541939/turn-off
+Content-Type: application/json
+Accept: application/json
+###
+
+POST http://127.0.0.1:8000//devices/vdevo173316521541939/switch_off
+Content-Type: application/json
+Accept: application/json
+###
+
+POST http://127.0.0.1:8000//devices/vdevo173316521541939/switch_on
+Content-Type: application/json
+Accept: application/json
+###
+
+
