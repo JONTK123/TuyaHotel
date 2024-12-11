@@ -1,8 +1,65 @@
 from starlette.websockets import WebSocket
+import websockets
+import json
 
 class WebSocketManager:
     def __init__(self):
         self.room_connections = {}  # Mapa: ROOM_ID -> [WebSocket]
+        self.centralizador_connection = None  # Conexão com o centralizador
+
+    async def connect_centralizador(self, centralizador_url: str):
+        """
+        Conecta ao centralizador via WebSocket e salva a conexão.
+        """
+        try:
+            self.centralizador_connection = await websockets.connect(centralizador_url)
+            print("Conectado ao centralizador com sucesso!")
+        except Exception as e:
+            print(f"Erro ao conectar com o centralizador: {e}")
+
+    async def send_to_centralizador(self, message: dict):
+        """
+        Envia uma mensagem para o centralizador.
+        """
+        if self.centralizador_connection:
+            try:
+                await self.centralizador_connection.send(json.dumps(message))
+                # Tratar o recebimento de um novo servidor individual no centralizador. "Sucesso ao adicionar novo servidor individual"
+                response = await self.centralizador_connection.recv()
+                print(f"Resposta do centralizador: {response}")
+            except Exception as e:
+                print(f"Erro ao enviar mensagem para o centralizador: {e}")
+        else:
+            print("Nenhuma conexão com o centralizador.")
+
+    def disconnect_centralizador(self):
+        """
+        Desconecta do centralizador.
+        """
+        if self.centralizador_connection:
+            try:
+                self.centralizador_connection.close()
+                print("Conexão com o centralizador encerrada.")
+            except Exception as e:
+                print(f"Erro ao desconectar do centralizador: {e}")
+
+
+    async def listen_to_centralizador(self):
+        """
+        Escuta mensagens do centralizador via WebSocket e processa os comandos recebidos.
+        """
+        if self.centralizador_connection:
+            try:
+                while True:
+                    # Receber mensagem do centralizador
+                    message = await self.centralizador_connection.recv()
+                    print(f"Mensagem recebida do centralizador: {message}")
+
+            except Exception as e:
+                print(f"Erro ao escutar mensagens do centralizador: {e}")
+        else:
+            print("Nenhuma conexão ativa com o centralizador para escutar mensagens.")
+
 
     async def connect(self, websocket: WebSocket, room_id: str):
         """
@@ -60,9 +117,13 @@ websocket_manager = WebSocketManager()
 # Broadcast envia para todos os clientes conectados ao backend
 
 # websocket_manager.room_connections = {
-#     "room_101": [websocket_client_1, websocket_client_2],  # Clientes conectados ao quarto 101
-#     "room_102": [websocket_client_3]                      # Clientes conectados ao quarto 102
+#     "room_101": {
+#         "connections": [websocket_client_1, websocket_client_2],  # Lista de conexões WebSocket conectadas ao quarto
+#         "do_not_disturb": True,  # Estado "Não Perturbe"
+#         "cleaning_requested": False  # Estado "Solicitação de Limpeza"
+#     }
 # }
+
 
 # Tudo é o mesmo backend / servidor, mas com diferentes quartos e usuários associados a eles.
 # O backend usara as mesmas credenciais de acesso da API mas com mesmo backend

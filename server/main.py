@@ -9,6 +9,7 @@ from fastapi import HTTPException
 import asyncio
 import threading
 import json
+import os
 
 load_dotenv()
 app = FastAPI()
@@ -35,8 +36,52 @@ app.add_middleware(
 
 openapi = initialize_tuya_openapi()
 
-DEVICE_ID = "vdevo173316521541939"
-ROOM_ID = "101" #Ficticio
+ROOM_ID = os.getenv("ROOM_ID")
+DEVICE_ID = os.getenv("DEVICE_ID")
+MAINBACKEND_URL = os.getenv("MAINBACKEND_URL")
+
+async def register_server():
+    try:
+        # Conectar ao centralizador
+        await websocket_manager.connect_centralizador(MAINBACKEND_URL)
+
+        # Criar o payload com as informações do backend
+        individual_server_data = {
+            "type": "registration",
+            "room_id": ROOM_ID,
+            "device_id": DEVICE_ID,
+            "url": f"http://localhost:{os.getenv('PORT', 8000)}"
+        }
+
+        # Enviar mensagem para o centralizador
+        await websocket_manager.send_to_centralizador(individual_server_data)
+
+        # Iniciar escuta de mensagens do centralizador
+        asyncio.create_task(websocket_manager.listen_to_centralizador())
+
+    except Exception as e:
+        print(f"Erro ao registrar no centralizador: {e}")
+
+async def send_status_update():
+    """
+    Envia o status atualizado para o centralizador.
+    """
+    # Obtém o status atualizado de room_connections
+    status = {
+        "type": "status_update",
+        "room_id": ROOM_ID,
+        "status": websocket_manager.room_connections.get(ROOM_ID, {
+            "do_not_disturb": False,
+            "cleaning_requested": False
+        })
+    }
+
+    try:
+        await websocket_manager.send_to_centralizador(status)
+        print(f"Status enviado ao centralizador: {status}")
+    except Exception as e:
+        print(f"Erro ao enviar status para o centralizador: {e}")
+
 
 # Cria o loop de eventos dedicado para o Tuya Pulsar
 pulsar_loop = asyncio.new_event_loop()
