@@ -21,14 +21,23 @@ Content-Type: application/json
 Accept: application/json
 ###
 
-POST http://127.0.0.1:8000//devices/vdevo173316521541939/switch_off
+POST http://127.0.0.1:8000/devices/vdevo173316521541939/switch_off
 Content-Type: application/json
 Accept: application/json
 ###
 
-POST http://127.0.0.1:8000//devices/vdevo173316521541939/switch_on
+POST http://127.0.0.1:8000/devices/vdevo173316521541939/switch_on
 Content-Type: application/json
 Accept: application/json
 ###
+
+GET http://127.0.0.1:8000/devices
+Accept: application/json
+###
+
+POST 127.0.0.1:8000/rooms
+Content-Type: application/json
+Accept: application/json
+
 
 

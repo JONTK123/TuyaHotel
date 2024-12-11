@@ -6,10 +6,11 @@ from server.tuya_setup import initialize_tuya_openapi, initialize_tuya_openpulsa
 from server.websocket_manager import websocket_manager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import HTTPException
+from server.database import db, COLLECTION_ROOMS
 import asyncio
 import threading
 import json
-import os
+
 
 load_dotenv()
 app = FastAPI()
@@ -35,52 +36,6 @@ app.add_middleware(
 )
 
 openapi = initialize_tuya_openapi()
-
-ROOM_ID = os.getenv("ROOM_ID")
-DEVICE_ID = os.getenv("DEVICE_ID")
-MAINBACKEND_URL = os.getenv("MAINBACKEND_URL")
-
-async def register_server():
-    try:
-        # Conectar ao centralizador
-        await websocket_manager.connect_centralizador(MAINBACKEND_URL)
-
-        # Criar o payload com as informações do backend
-        individual_server_data = {
-            "type": "registration",
-            "room_id": ROOM_ID,
-            "device_id": DEVICE_ID,
-            "url": f"http://localhost:{os.getenv('PORT', 8000)}"
-        }
-
-        # Enviar mensagem para o centralizador
-        await websocket_manager.send_to_centralizador(individual_server_data)
-
-        # Iniciar escuta de mensagens do centralizador
-        asyncio.create_task(websocket_manager.listen_to_centralizador())
-
-    except Exception as e:
-        print(f"Erro ao registrar no centralizador: {e}")
-
-async def send_status_update():
-    """
-    Envia o status atualizado para o centralizador.
-    """
-    # Obtém o status atualizado de room_connections
-    status = {
-        "type": "status_update",
-        "room_id": ROOM_ID,
-        "status": websocket_manager.room_connections.get(ROOM_ID, {
-            "do_not_disturb": False,
-            "cleaning_requested": False
-        })
-    }
-
-    try:
-        await websocket_manager.send_to_centralizador(status)
-        print(f"Status enviado ao centralizador: {status}")
-    except Exception as e:
-        print(f"Erro ao enviar status para o centralizador: {e}")
 
 
 # Cria o loop de eventos dedicado para o Tuya Pulsar
@@ -120,23 +75,25 @@ pulsar_thread.start()
 async def get_device_state():
     response = openapi.get(f"/v2.0/cloud/thing/{DEVICE_ID}/shadow/properties")
     return response.get("result")
-
 # Endpoint WebSocket para notificações
 @app.websocket("/ws/notifications")
 async def websocket_endpoint(websocket: WebSocket):
+    # Conecta o cliente ao quarto especificado
     await websocket_manager.connect(websocket, ROOM_ID)
 
+    # Envia informações iniciais para o cliente
     await websocket.send_text(json.dumps({
         "type": "room_number",
         "data": ROOM_ID
     }))
-
     await websocket.send_text(json.dumps({
         "type": "device_id",
         "data": DEVICE_ID
     }))
 
-    previous_state = None  # Estado anterior do dispositivo
+    # Estado anterior do dispositivo
+    previous_state = None
+
     try:
         while True:
             try:
@@ -145,12 +102,16 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 # Verifica mudanças no estado do dispositivo
                 if current_state != previous_state:
+                    # Atualiza o estado do dispositivo em `rooms`
+                    update_device_status(ROOM_ID, DEVICE_ID, current_state)
+
+                    # Envia a atualização para os clientes conectados
                     await websocket.send_json({
                         "type": "device_state",
                         "data": current_state
-
                     })
 
+                    # Atualiza o estado anterior
                     previous_state = current_state
 
                 await asyncio.sleep(5)  # Aguarda 5 segundos antes da próxima verificação
@@ -160,8 +121,67 @@ async def websocket_endpoint(websocket: WebSocket):
                 break
 
     except WebSocketDisconnect:
-        websocket_manager.disconnect(websocket)
+        websocket_manager.disconnect(websocket, ROOM_ID)
         print("WebSocket desconectado")
+
+room_id = "room_101"
+devices = [
+    {"id": "device_1", "name": "Lamp", "status": "OFF"},
+    {"id": "device_2", "name": "Fan", "status": "ON"}
+]
+
+@app.post("/rooms")
+async def insert_room_with_devices(room_id, devices):
+    """
+    Insere um quarto com dispositivos no banco de dados.
+    """
+    try:
+        room_data = {
+            "room_id": room_id,
+            "connections": [],  # Inicialmente vazio
+            "devices": devices,
+            "do_not_disturb": False,
+            "cleaning_requested": False
+        }
+
+        result = await db[COLLECTION_ROOMS].insert_one(room_data)
+        print(f"Quarto {room_id} inserido com sucesso. ID do documento: {result.inserted_id}")
+    except Exception as e:
+        print(f"Erro ao inserir quarto: {str(e)}")
+
+# Função para atualizar o estado do dispositivo na estrutura centralizada
+def update_device_status(room_id, device_id, current_state):
+    """
+    Atualiza o estado de um dispositivo específico na estrutura centralizada `rooms`.
+    """
+    if room_id in websocket_manager.rooms:
+        devices = websocket_manager.rooms[room_id]["devices"]
+        for device in devices:
+            if device["id"] == device_id:
+                device["status"] = current_state  # Atualiza o estado do dispositivo
+                print(f"Estado do dispositivo {device_id} no quarto {room_id} atualizado: {current_state}")
+                return
+    else:
+        print(f"Quarto {room_id} ou dispositivo {device_id} não encontrado na estrutura centralizada.")
+
+@app.get("/devices")
+async def list_devices():
+    try:
+        # Faz a chamada para o endpoint de listagem de dispositivos
+        response = openapi.get("/v1.3/iot-03/devices")
+
+        if response.get("success"):
+            return {"devices": response.get("result")}
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Erro ao listar dispositivos: {response.get('msg')}"
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro interno: {str(e)}"
+        )
 
 # Endpoint raiz para teste
 @app.get("/")
@@ -277,16 +297,15 @@ async def switch_on_device(device_id: str):
             detail=f"Internal error: {str(e)}"
         )
 
+# 1.Add dispositivos IoT no projeto Tuya
+# 2.Listar dispositivos disponíveis
+# 3.Criar quartos e associar dispositivos e salvar no Banco de Dados
+# 4.Carregar dados do banco no backend e sicronizar com websocket
+# 5.Efetuar as funcoes da Tuya API get_device_state e switch_off_device por exemplo
+# (PRECISO FILTRAR ESSES DADOS PARA SALVAR NO BANCO DE DADOS E ENVIAR PARA O FRONTEND SO O Q PRECISA, NOME, SWTICH_LED, ID POR EXEMPLO)
+# 6.Salvar no banco de dados o estado do dispositivo com update_device_state toda vez que houver uma mudança de estado
 
-# Sugestoes de diferentes abordagens:
-
-# 1. Req uma vez e a cada notifiacao de mudanca, alterar o estado do dispositivo e atualizar
-# 2. Botao para ficar atualizando e executando endpoint
-# 3. ( Solucao atual ) Atualizar periodicamente com chamadas no backend e ir atualizando o FE
-
-# Lista de IDs de dispositivos associados a cada quarto
-
-# O backend associado ao Quarto é configurado para lidar apenas com os devices especificados
-# Dois clientes (um gerente e um aplicativo de monitoramento) conectam-se ao backend para receber notificações e controlar o dispositivo daquele quarto
-# Durante a conexão, eles são associados ao numero do quarto
+# 1.Frontend do quarto define status de limpeza e não perturbe e passa para o backend
+# 2.Backend salva no banco de dados e sincroniza com websocket
+# 3.Envia o status para outra tela frontend Tela de monitoramento central
 
