@@ -8,7 +8,7 @@ load_dotenv()
 # Configurações do MongoDB
 MONGO_URI = os.getenv("MONGO_URI")
 DATABASE_NAME = os.getenv("DATABASE_NAME")
-COLLECTION_ROOMS = "rooms"
+COLLECTION_ROOMS = os.getenv("COLLECTION_ROOMS")
 
 # Inicializar cliente MongoDB
 client = AsyncIOMotorClient(MONGO_URI)

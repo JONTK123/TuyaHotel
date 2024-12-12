@@ -4,14 +4,11 @@ import axios from "axios";
 import Notification from "./Notification";
 
 const Devices = () => {
-    const [devices, setDevices] = useState<any>({});
+    const [devices, setDevices] = useState<any[]>([]); // Lista de dispositivos
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [roomNumber, setRoomNumber] = useState("");
     const [notifications, setNotifications] = useState<string[]>([]);
-    const [ligado, setLigado] = useState<boolean | null>(null); // Inicial como null para diferenciar entre "não carregado"
-    const [deviceID, setDeviceID] = useState("");
-    const [isProcessing, setIsProcessing] = useState(false); // Estado para gerenciar o botão enquanto processa
+    const [processingDevice, setProcessingDevice] = useState<string | null>(null); // Gerencia o estado de processamento de um dispositivo específico
 
     useEffect(() => {
         const connectWebSocket = () => {
@@ -20,28 +17,25 @@ const Devices = () => {
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
+                    console.log("Dados recebidos do WebSocket:", data);
 
                     if (data.type === "pulsar_notification") {
                         const notificationMessage = `Atualização recebida: ${JSON.stringify(data.data)}`;
                         setNotifications((prev) => {
-                            if (!prev.includes(notificationMessage)) {
-                                return [...prev, notificationMessage];
-                            }
-                            return prev;
+                            const newNotifications = [...prev, notificationMessage];
+                            return newNotifications.slice(-10); // Mantém apenas as últimas 10 notificações
                         });
                     } else if (data.type === "device_state") {
-                        const switchState = data.data?.properties?.find((prop: any) => prop.code === "switch_led")?.value;
-                        setLigado(switchState); // Atualiza com o valor real retornado (true ou false)
-                        setDevices(data.data);
-                        setLoading(false);
-                        setIsProcessing(false); // Finaliza o estado de processamento
-                        console.log("Estado do dispositivo atualizado:", data.data);
-                    } else if (data.type === "room_number") {
-                        setRoomNumber(data.data);
-                    } else if (data.type === "device_id") {
-                        setDeviceID(data.data);
-                    } else {
-                        console.warn("Mensagem desconhecida recebida:", data);
+                        // Atualiza os estados dos dispositivos recebidos
+                        if (data.data) {
+                            setDevices(data.data);
+                            setLoading(false);
+
+                            // Se algum dispositivo estava sendo processado, desativa o estado de processamento
+                            if (processingDevice) {
+                                setProcessingDevice(null);
+                            }
+                        }
                     }
                 } catch (error) {
                     console.error("Erro ao processar os dados do WebSocket:", error);
@@ -62,27 +56,25 @@ const Devices = () => {
         };
 
         connectWebSocket();
-    }, []);
+    }, [processingDevice]);
 
-    const handleTurnOnOff = async () => {
+    const handleTurnOnOff = async (device_id: string, stateKey: string, currentState: string) => {
         try {
-            setIsProcessing(true); // Inicia o estado de processamento
-            const endpoint = ligado
-                ? `http://localhost:8000/devices/${deviceID}/switch_off`
-                : `http://localhost:8000/devices/${deviceID}/switch_on`;
+            setProcessingDevice(device_id); // Define o dispositivo sendo processado
+            const endpoint =
+                currentState === "ON"
+                    ? `http://localhost:8000/devices/${device_id}/switch_off`
+                    : `http://localhost:8000/devices/${device_id}/switch_on`;
 
-            await axios.post(endpoint);
+            await axios.post(endpoint, {
+                properties: { [stateKey]: currentState === "ON" ? false : true },
+            });
 
             console.log("Comando enviado para o backend. Aguardando atualização do estado...");
         } catch (err: any) {
-            if (err.response) {
-                console.error("Erro ao alternar estado:", err.response.data.detail);
-                setError(err.response.data.detail || "Erro desconhecido");
-            } else {
-                console.error("Erro na comunicação com o servidor:", err.message);
-                setError("Erro na comunicação com o servidor.");
-            }
-            setIsProcessing(false); // Finaliza o estado de processamento em caso de erro
+            console.error("Erro ao alternar estado:", err);
+            setError(err.response?.data?.detail || "Erro na comunicação com o servidor.");
+            setProcessingDevice(null); // Finaliza o estado de processamento em caso de erro
         }
     };
 
@@ -107,45 +99,73 @@ const Devices = () => {
     return (
         <Box sx={{ padding: 2 }}>
             <Typography variant="h5" gutterBottom>
-                Quarto {roomNumber}
+                Painel de Dispositivos
             </Typography>
 
-            <Button
-                variant="contained"
-                color={ligado ? "secondary" : "primary"}
-                onClick={handleTurnOnOff}
-                disabled={isProcessing} // Desabilita o botão enquanto processa
-                style={{ marginBottom: "20px" }}
-            >
-                {isProcessing ? "Processando..." : ligado ? "Desligar Luz" : "Ligar Luz"}
-            </Button>
+            {devices.length > 0 ? (
+                devices.map((device, index) => (
+                    <Box key={index} sx={{ border: "1px solid #ccc", padding: 2, marginBottom: 2 }}>
+                        <Typography variant="h6">{device.name}</Typography>
+                        <Typography variant="body2">Categoria: {device.category}</Typography>
+                        <Typography variant="body2">Online: {device.isOnline ? "Sim" : "Não"}</Typography>
 
-            {/* Exibe as notificações */}
-            <Box>
-                {notifications.map((message, index) => (
-                    <Notification
-                        key={index}
-                        message={message}
-                        onClose={() => handleRemoveNotification(index)}
-                        duration={3000} // Notificação some após 3 segundos
-                    />
-                ))}
-            </Box>
-
-            {devices.properties && devices.properties.length > 0 ? (
-                <Box>
-                    {devices.properties.map((device: any, index: number) => (
-                        <Box key={index} sx={{ border: "1px solid #ccc", padding: 2, marginBottom: 2 }}>
-                            <Typography variant="body1" gutterBottom>
-                                {device.code}
+                        {/* Renderiza os estados do dispositivo */}
+                        {Object.keys(device.states).map((key) => (
+                            <Typography key={key} variant="body2">
+                                {key}: {device.states[key]}
                             </Typography>
-                            <pre>{JSON.stringify(device, null, 2)}</pre>
-                        </Box>
-                    ))}
-                </Box>
+                        ))}
+
+                        {/* Botão para ligar/desligar */}
+                        {device.states["switch_led"] !== undefined && (
+                            <Button
+                                variant="contained"
+                                color={device.states["switch_led"] === "ON" ? "secondary" : "primary"}
+                                onClick={() => handleTurnOnOff(device.id, "switch_led", device.states["switch_led"])}
+                                disabled={processingDevice === device.id}
+                                style={{ marginTop: "10px" }}
+                            >
+                                {processingDevice === device.id
+                                    ? "Processando..."
+                                    : device.states["switch_led"] === "ON"
+                                    ? "Desligar"
+                                    : "Ligar"}
+                            </Button>
+                        )}
+
+                        {device.category === "interruptor" &&
+                            ["switch_1", "switch_2", "switch_3"].map((key) =>
+                                device.states[key] !== undefined ? (
+                                    <Button
+                                        key={key}
+                                        variant="contained"
+                                        color={device.states[key] === "ON" ? "secondary" : "primary"}
+                                        onClick={() => handleTurnOnOff(device.id, key, device.states[key])}
+                                        disabled={processingDevice === device.id}
+                                        style={{ marginTop: "10px", marginLeft: "10px" }}
+                                    >
+                                        {processingDevice === device.id
+                                            ? "Processando..."
+                                            : device.states[key] === "ON"
+                                            ? `${key}: Desligar`
+                                            : `${key}: Ligar`}
+                                    </Button>
+                                ) : null
+                            )}
+                    </Box>
+                ))
             ) : (
                 <Typography>Nenhum dispositivo encontrado.</Typography>
             )}
+
+            {/* Notificações */}
+            {notifications.map((message, index) => (
+                <Notification
+                    key={index}
+                    message={message}
+                    onClose={() => handleRemoveNotification(index)}
+                />
+            ))}
         </Box>
     );
 };

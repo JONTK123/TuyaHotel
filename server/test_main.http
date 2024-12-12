@@ -35,9 +35,15 @@ GET http://127.0.0.1:8000/devices
 Accept: application/json
 ###
 
-POST 127.0.0.1:8000/rooms
+POST http://127.0.0.1:8000/rooms
 Content-Type: application/json
 Accept: application/json
 
+{
+  "room_id": "room_102",
+  "devices": [
+    {"id": "vdevo173316521541939", "name": "Air Conditioner", "switch_led": "ON", "category": "dj", "isOnline": "true" }
+  ]
+}
 
-
+###
