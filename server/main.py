@@ -21,7 +21,9 @@ origins = [
     "http://localhost:3001",
     "http://localhost:3002",
     "http://localhost:3003",
-    "http://localhost:3004"
+    "http://localhost:3004",
+    "http://localhost:3006"
+
 ]
 
 app.add_middleware(
@@ -84,7 +86,7 @@ async def save_device_log(device_id, log_data):
     except Exception as e:
         print(f"Erro ao salvar log no device_logs: {e}")
 
-async def update_device_state_if_changed(room_id, device_id, new_state):
+async def update_device_state(room_id, device_id, current_device_state):
     try:
         room = await db[COLLECTION_ROOMS].find_one({"room_id": room_id})
         if not room:
@@ -93,12 +95,11 @@ async def update_device_state_if_changed(room_id, device_id, new_state):
         devices = room.get("devices", [])
         for device in devices:
             if device["id"] == device_id:
-                if device.get("states") == new_state:
-                    return False
+                device["states"] = current_device_state
 
                 await db[COLLECTION_ROOMS].update_one(
                     {"room_id": room_id, "devices.id": device_id},
-                    {"$set": {"devices.$.states": new_state}}
+                    {"$set": {"devices.$.states": current_device_state}}
                 )
                 return True
 
@@ -137,13 +138,11 @@ async def get_device_state(device_id):
             if code in state_fields:  # Somente incluir os campos configurados
                 device_data["states"][code] = "ON" if value else "OFF"
 
-        print(f"Final Device Data: {device_data}")  # Debug
         return device_data
 
     except Exception as e:
         print(f"Erro ao obter estado do dispositivo {device_id}: {e}")
         return None
-
 
 @app.websocket("/ws/notifications/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
@@ -153,22 +152,30 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
         # Obtenha informações do quarto do banco de dados
         room = await db[COLLECTION_ROOMS].find_one({"room_id": room_id})
         if not room:
-            await websocket.send_json({"error": "Quarto não encontrado."})
+
+            message = {
+                "type": "error",
+                "data": f"Quarto '{room_id}' não encontrado no banco de dados."
+            }
+
+            await websocket.send_json(message)
             return
 
         devices = room.get("devices", [])
 
+        previous_device_states = {}
+
         while True:
             all_device_states = []
             for device in devices:
-                device_state = await get_device_state(device["id"])
-                if device_state:
-                    updated = await update_device_state_if_changed(
-                        room_id, device["id"], device_state["states"]
-                    )
-                    print(f"Estado do dispositivo {device_state} atualizado? {updated}")
-                    if updated:
-                        all_device_states.append(device_state)
+                current_device_state = await get_device_state(device["id"])
+                if current_device_state:
+                    previous_device_state = previous_device_states.get(device["id"])
+                    if current_device_state != previous_device_state:
+                        await update_device_state(room_id, device["id"], current_device_state["states"])
+                        previous_device_states[device["id"]] = current_device_state
+
+                    all_device_states.append(current_device_state)
 
             if all_device_states:
                 message = {
@@ -179,7 +186,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
                 print(f"Enviando estados dos dispositivos para {room_id}: {message}")
                 await WebSocketManager.send_to_room(room_id, message)
 
-            await asyncio.sleep(4.5)
+            await asyncio.sleep(2)
 
     except WebSocketDisconnect:
         WebSocketManager.disconnect(websocket, room_id)
@@ -191,13 +198,37 @@ async def insert_room_with_devices(room: Room):
     try:
         room_data = {
             "room_id": room.room_id,
-            "connections": [],
             "devices": [device.dict() for device in room.devices],
         }
-        await db[COLLECTION_ROOMS].insert_one(room_data)
-        return {"message": f"Quarto {room.room_id} adicionado com sucesso!"}
+
+        existing_room = await db[COLLECTION_ROOMS].find_one({"room_id": room.room_id})
+        if existing_room:
+            # Update the devices in the existing room
+            existing_devices = existing_room.get("devices", [])
+            new_devices = room_data["devices"]
+
+            # Merge existing devices with new devices
+            device_ids = {device["id"] for device in existing_devices}
+            for new_device in new_devices:
+                if new_device["id"] in device_ids:
+                    # Update existing device
+                    await db[COLLECTION_ROOMS].update_one(
+                        {"room_id": room.room_id, "devices.id": new_device["id"]},
+                        {"$set": {"devices.$": new_device}}
+                    )
+                else:
+                    # Add new device
+                    await db[COLLECTION_ROOMS].update_one(
+                        {"room_id": room.room_id},
+                        {"$push": {"devices": new_device}}
+                    )
+        else:
+            # Insert new room with devices
+            await db[COLLECTION_ROOMS].insert_one(room_data)
+
+        return {"message": f"Quarto {room.room_id} adicionado ou atualizado com sucesso!"}
     except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/devices")
 async def list_devices():

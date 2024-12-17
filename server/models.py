@@ -11,5 +11,4 @@ class Device(BaseModel):
 
 class Room(BaseModel):
     room_id: str
-    connections: List[str] = None
     devices: List[Device]

@@ -1,79 +1,115 @@
-import React, { useEffect, useState } from "react";
-import { Box, CircularProgress, Typography, Alert, Button } from "@mui/material";
+import React, { useEffect, useState, useRef } from "react";
+import {
+    Box,
+    CircularProgress,
+    Typography,
+    Alert,
+    Button,
+    Select,
+    MenuItem,
+    SelectChangeEvent,
+} from "@mui/material";
 import axios from "axios";
-import Notification from "./Notification";
 
 const Devices = () => {
-    const [devices, setDevices] = useState<any[]>([]); // Lista de dispositivos
+    const [devices, setDevices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [notifications, setNotifications] = useState<string[]>([]);
-    const [processingDevice, setProcessingDevice] = useState<string | null>(null); // Gerencia o estado de processamento de um dispositivo específico
-    const [roomNumber, setRoomNumber] = useState("");
-    const room_id = "quarto_1";
+    const [selectedRoom, setSelectedRoom] = useState<string>("quarto_1");
+    const [waitingForDeviceUpdate, setWaitingForDeviceUpdate] = useState<boolean>(false);
+
+    const wsRef = useRef<WebSocket | null>(null);
+    const isFirstLoad = useRef<boolean>(true);
 
     useEffect(() => {
-        const connectWebSocket = () => {
-            const ws = new WebSocket(`ws://localhost:8000/ws/notifications/${room_id}`);
-            console.log("conectado ao websocket👌")
-            setRoomNumber(room_id);
+        if (isFirstLoad.current) {
+            isFirstLoad.current = false;
+            return;
+        }
 
-            ws.onmessage = (event) => {
+        const connectWebSocket = () => {
+            if (wsRef.current) {
+                console.log("Fechando conexão anterior...");
+                wsRef.current.close();
+            }
+
+            setDevices([]);
+            setError("");
+            setLoading(true);
+
+            wsRef.current = new WebSocket(
+                `ws://localhost:8000/ws/notifications/${selectedRoom}`
+            );
+            console.log(`Tentando conectar ao WebSocket do ${selectedRoom}`);
+
+            wsRef.current.onopen = () => {
+                console.log("Conexão WebSocket aberta!");
+                setLoading(false);
+            };
+
+            wsRef.current.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    console.log("Dados recebidos do WebSocket:", data);
 
-                    if (!data.type) {
-                        throw new Error("Certifique-se de que o Banco de Dados possui quartos..."); // Verifica se o objeto possui a chave "type"
-                    }
-
-                    if (data.type === "pulsar_notification") {
-                        console.log("Notificação Tuya recebida:", data.data); // Log para notificação
-                        const notificationMessage = `Atualização recebida: ${JSON.stringify(data.data)}`;
-                        setNotifications((prev) => {
-                            const newNotifications = [...prev, notificationMessage];
-                            return newNotifications.slice(-10); // Mantém apenas as últimas 10 notificações
-                        });
-                    } else if (data.type === "device_state") {
-                        // Atualiza os estados dos dispositivos recebidos
-                        if (data.data) {
-                            setDevices(data.data);
-                            setLoading(false);
-
-                            // Se algum dispositivo estava sendo processado, desativa o estado de processamento
-                            if (processingDevice) {
-                                setProcessingDevice(null);
-                            }
-                        }
+                    if (data.type === "error") {
+                        setError(data.data);
+                        setDevices([]);
+                    } else if (data.type === "device_state" && data.data) {
+                        setDevices(data.data);
+                        setWaitingForDeviceUpdate(false); // Libera o botão ao receber o estado atualizado
+                    } else if (data.type === "pulsar_notification") {
+                        const notificationMessage = `Atualização recebida: ${JSON.stringify(
+                            data.data
+                        )}`;
+                        setNotifications((prev) => [...prev, notificationMessage].slice(-10));
                     }
                 } catch (error) {
                     console.error("Erro ao processar os dados do WebSocket:", error);
-                    setError("Erro ao processar os dados do WebSocket");
+                    setError("Erro ao processar os dados do WebSocket.");
                 }
             };
 
-            ws.onerror = () => {
-                setError("Erro ao conectar ao WebSocket");
+            wsRef.current.onerror = () => {
+                setError("Erro ao conectar ao WebSocket.");
+                setLoading(false);
             };
 
-            ws.onclose = () => {
-                console.log("Conexão WebSocket encerrada. Tentando reconectar...");
-                setTimeout(connectWebSocket, 5000);
+            wsRef.current.onclose = () => {
+                console.log(`Conexão encerrada para o ${selectedRoom}.`);
             };
-
-            return () => ws.close();
         };
 
         connectWebSocket();
-    }, [processingDevice]);
 
-    const handleTurnOnOff = async (device_id: string, stateKey: string, currentState: string) => {
+        return () => {
+            if (wsRef.current) {
+                console.log("Limpando conexão WebSocket...");
+                wsRef.current.close();
+            }
+        };
+    }, [selectedRoom]);
+
+    useEffect(() => {
+        setSelectedRoom("quarto_1");
+    }, []);
+
+    const handleRoomChange = (event: SelectChangeEvent<string>) => {
+        setSelectedRoom(event.target.value as string);
+    };
+
+    const handleTurnOnOff = async (
+        device_id: string,
+        stateKey: string,
+        currentState: string
+    ) => {
         try {
-            setProcessingDevice(device_id); // Define o dispositivo sendo processado
+            setWaitingForDeviceUpdate(true); // Aguarda a atualização via WebSocket
+
             const endpoint =
                 currentState === "ON"
-                    ? `http://localhost:8000/devices/${device_id}/switch_off`
-                    : `http://localhost:8000/devices/${device_id}/switch_on`;
+                    ? `http://localhost:8000/api/devices/${device_id}/switch_off`
+                    : `http://localhost:8000/api/devices/${device_id}/switch_on`;
 
             await axios.post(endpoint, {
                 properties: { [stateKey]: currentState === "ON" ? false : true },
@@ -82,99 +118,94 @@ const Devices = () => {
             console.log("Comando enviado para o backend. Aguardando atualização do estado...");
         } catch (err: any) {
             console.error("Erro ao alternar estado:", err);
-            setError(err.response?.data?.detail || "Erro na comunicação com o servidor.");
-            setProcessingDevice(null); // Finaliza o estado de processamento em caso de erro
+            setError(
+                err.response?.data?.detail || "Erro na comunicação com o servidor."
+            );
+            setWaitingForDeviceUpdate(false);
         }
     };
-
-    const handleRemoveNotification = (index: number) => {
-        setNotifications((prev) => prev.filter((_, i) => i !== index));
-    };
-
-    if (loading)
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" height="300px">
-                <CircularProgress />
-            </Box>
-        );
-
-    if (error)
-        return (
-            <Alert severity="error" style={{ margin: "20px" }}>
-                {error}
-            </Alert>
-        );
 
     return (
         <Box sx={{ padding: 2 }}>
             <Typography variant="h5" gutterBottom>
-                Painel de Dispositivos do quarto {roomNumber}
+                Dispositivos do {selectedRoom}
             </Typography>
 
-            {devices.length > 0 ? (
-                devices.map((device, index) => (
-                    <Box key={index} sx={{ border: "1px solid #ccc", padding: 2, marginBottom: 2 }}>
-                        <Typography variant="h6">{device.name}</Typography>
-                        <Typography variant="body2">Categoria: {device.category}</Typography>
-                        <Typography variant="body2">Online: {device.isOnline ? "Sim" : "Não"}</Typography>
+            {/* Seletor de Quartos */}
+            <Box sx={{ marginBottom: 2 }}>
+                <Select
+                    value={selectedRoom}
+                    onChange={handleRoomChange}
+                    style={{ minWidth: 120 }}
+                >
+                    <MenuItem value="quarto_1">Quarto 1</MenuItem>
+                    <MenuItem value="quarto_2">Quarto 2</MenuItem>
+                    <MenuItem value="quarto_3">Quarto 3</MenuItem>
+                </Select>
+            </Box>
 
-                        {/* Renderiza os estados do dispositivo */}
-                        {Object.keys(device.states).map((key) => (
-                            <Typography key={key} variant="body2">
-                                {key}: {device.states[key]}
-                            </Typography>
-                        ))}
-
-                        {/* Botão para ligar/desligar */}
-                        {device.states["switch_led"] !== undefined && (
-                            <Button
-                                variant="contained"
-                                color={device.states["switch_led"] === "ON" ? "secondary" : "primary"}
-                                onClick={() => handleTurnOnOff(device.id, "switch_led", device.states["switch_led"])}
-                                disabled={processingDevice === device.id}
-                                style={{ marginTop: "10px" }}
-                            >
-                                {processingDevice === device.id
-                                    ? "Processando..."
-                                    : device.states["switch_led"] === "ON"
-                                    ? "Desligar"
-                                    : "Ligar"}
-                            </Button>
-                        )}
-
-                        {device.category === "interruptor" &&
-                            ["switch_1", "switch_2", "switch_3"].map((key) =>
-                                device.states[key] !== undefined ? (
-                                    <Button
-                                        key={key}
-                                        variant="contained"
-                                        color={device.states[key] === "ON" ? "secondary" : "primary"}
-                                        onClick={() => handleTurnOnOff(device.id, key, device.states[key])}
-                                        disabled={processingDevice === device.id}
-                                        style={{ marginTop: "10px", marginLeft: "10px" }}
-                                    >
-                                        {processingDevice === device.id
-                                            ? "Processando..."
-                                            : device.states[key] === "ON"
-                                            ? `${key}: Desligar`
-                                            : `${key}: Ligar`}
-                                    </Button>
-                                ) : null
-                            )}
-                    </Box>
-                ))
-            ) : (
-                <Typography>Nenhum dispositivo encontrado.</Typography>
+            {/* Carregamento */}
+            {loading && (
+                <Box
+                    display="flex"
+                    justifyContent="center"
+                    alignItems="center"
+                    height="300px"
+                >
+                    <CircularProgress />
+                </Box>
             )}
 
-            {/* Notificações */}
-            {notifications.map((message, index) => (
-                <Notification
-                    key={index}
-                    message={message}
-                    onClose={() => handleRemoveNotification(index)}
-                />
-            ))}
+            {/* Erro */}
+            {error && (
+                <Alert severity="error" style={{ margin: "20px" }}>
+                    {error}
+                </Alert>
+            )}
+
+            {/* Lista de Dispositivos */}
+            {!loading && !error
+                ? devices.map((device, index) => (
+                      <Box
+                          key={index}
+                          sx={{ border: "1px solid #ccc", padding: 2, marginBottom: 2 }}
+                      >
+                          <Typography variant="h6">{device.name}</Typography>
+                          <Typography>Categoria: {device.category}</Typography>
+                          <Typography>Online: {device.Online ? "Sim" : "Não"}</Typography>
+
+                          {Object.keys(device.states).map((key) => (
+                              <Typography key={key}>
+                                  {key}: {device.states[key]}
+                              </Typography>
+                          ))}
+
+                          {/* Botão Ligar/Desligar */}
+                          {device.states["switch_led"] !== undefined && (
+                              <Button
+                                  variant="contained"
+                                  color={
+                                      device.states["switch_led"] === "ON"
+                                          ? "secondary"
+                                          : "primary"
+                                  }
+                                  onClick={() =>
+                                      handleTurnOnOff(
+                                          device.id,
+                                          "switch_led",
+                                          device.states["switch_led"]
+                                      )
+                                  }
+                                  style={{ marginTop: "10px" }}
+                              >
+                                  {device.states["switch_led"] === "ON"
+                                      ? "Desligar"
+                                      : "Ligar"}
+                              </Button>
+                          )}
+                      </Box>
+                  ))
+                : null}
         </Box>
     );
 };

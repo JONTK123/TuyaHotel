@@ -41,7 +41,6 @@ Accept: application/json
 
  {
      "room_id": "quarto_1",
-     "connections": [],
      "devices": [
          {
              "id": "vdevo173316521541939",
@@ -62,7 +61,6 @@ Accept: application/json
 
  {
      "room_id": "quarto_2",
-     "connections": [],
      "devices": [
          {
              "id": "6836066470039f3b913c",
@@ -75,3 +73,30 @@ Accept: application/json
      ]
  }
 
+###
+
+POST http://127.0.0.1:8000/add_rooms
+Content-Type: application/json
+Accept: application/json
+
+ {
+     "room_id": "quarto_2",
+     "devices": [
+         {
+             "id": "6836066470039f3b913c",
+             "name": "Interruptor",
+             "category_name": "Switch",
+             "category": "kg",
+             "online": true,
+             "states": {}
+         },
+            {
+                "id": "vdevo173316521541939",
+                "name": "Lâmpada Inteligente",
+                "category_name": "Switch",
+                "category": "dj",
+                "online": true,
+                "states": {}
+            }
+     ]
+ }
