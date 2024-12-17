@@ -1,26 +1,24 @@
-from starlette.websockets import WebSocket
 from dotenv import load_dotenv
-from fastapi import FastAPI
-from starlette.websockets import WebSocketDisconnect
-from server.tuya_setup import initialize_tuya_openapi, initialize_tuya_openpulsar
-from server.websocket_manager import websocket_manager
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import HTTPException
-from server.database import db, COLLECTION_ROOMS
+from server.tuya_setup import initialize_tuya_openapi, initialize_tuya_openpulsar
+from server.database import db, COLLECTION_ROOMS, COLLECTION_DEVICE_LOGS
 from server.models import Room
+from server.device_control import router as device_control_router
+from server.websocket_manager import WebSocketManager
 import asyncio
-import threading
-import json
 
 load_dotenv()
 app = FastAPI()
 
+# Configurar loop principal do asyncio
 main_loop = asyncio.get_event_loop()
+app.include_router(device_control_router, prefix="/api")
 
-# Configurar CORS para permitir requisições do frontend
+# Configurar CORS
 origins = [
-    "http://localhost:3000",  # URL do React durante o desenvolvimento
-    "http://localhost:3001",  # Certifique-se de incluir essa porta
+    "http://localhost:3000",
+    "http://localhost:3001",
     "http://localhost:3002",
     "http://localhost:3003",
     "http://localhost:3004"
@@ -36,221 +34,174 @@ app.add_middleware(
 
 openapi = initialize_tuya_openapi()
 
-pulsar_loop = asyncio.new_event_loop()
-
-
-# Mudar isso
-DEVICE_CONFIGS = {
-    "lampada": {
-        "type": "lampada",
+# Configurações de dispositivos
+DEVICE_STATES = {
+    "Lâmpada Inteligente": {
+        "category_name": "Light Source",
         "state_fields": ["switch_led"],
     },
-    "interruptor": {
-        "type": "interruptor",
+
+    "Interruptor": {
+        "category_name": "Switch",
         "state_fields": ["switch_1", "switch_2", "switch_3"],
-    },
-    # Dispositivos pre definidos na Tuya e que serao usados no quarto do hotel
+    }
 }
-# Listener para mensagens do Tuya Pulsar - Eventos inesperados
+
+# Listener para mensagens do Tuya Pulsar
 def message_listener(msg):
     print(f"Mensagem recebida do Tuya Pulsar: {msg}")
     try:
-        # Prepara a mensagem no formato esperado pelo frontend
-        message = {
-            "type": "pulsar_notification",
-            "data": msg  # Dados brutos do Tuya Pulsar
-        }
+        device_id = msg.get("devId")
+        room = asyncio.run(fetch_room_by_device(device_id))
 
-        # Envia a mensagem para todos os clientes conectados
-        asyncio.run_coroutine_threadsafe(
-            websocket_manager.broadcast(message),  # Broadcast para todos os clientes
-            main_loop  # Passa o loop principal explicitamente
-        )
+        if room:
+            message = {
+                "type": "pulsar_notification",
+                "data": msg
+            }
+            print(f"Mensagem enviada para o WebSocket: {message}")
+            asyncio.run(WebSocketManager.send_to_room(room["room_id"], message))
+            asyncio.run(save_device_log(device_id, msg))
+
     except Exception as e:
         print(f"Erro ao processar mensagem do Tuya Pulsar: {e}")
 
-# Função para iniciar o listener do Tuya Pulsar
-def start_pulsar_listener():
-    asyncio.set_event_loop(pulsar_loop)
-    initialize_tuya_openpulsar(message_listener)
-    print("Tuya Pulsar Listener iniciado.")
-    pulsar_loop.run_forever()
-
-# Inicia o listener do Tuya Pulsar em uma thread separada
-pulsar_thread = threading.Thread(target=start_pulsar_listener, daemon=True)
-pulsar_thread.start()
-
-# Função para obter o estado do dispositivo via API Tuya
-async def get_device_state(device_id, device_type):
+async def fetch_room_by_device(device_id):
     try:
-        # 1. Obter informações gerais do dispositivo
+        room = await db[COLLECTION_ROOMS].find_one({"devices.id": device_id})
+        return room
+    except Exception as e:
+        print(f"Erro ao buscar quarto no banco de dados: {e}")
+        return None
+
+async def save_device_log(device_id, log_data):
+    try:
+        log_entry = {
+            "device_id": device_id,
+            "log": log_data
+        }
+        await db[COLLECTION_DEVICE_LOGS].insert_one(log_entry)
+    except Exception as e:
+        print(f"Erro ao salvar log no device_logs: {e}")
+
+async def update_device_state_if_changed(room_id, device_id, new_state):
+    try:
+        room = await db[COLLECTION_ROOMS].find_one({"room_id": room_id})
+        if not room:
+            return False
+
+        devices = room.get("devices", [])
+        for device in devices:
+            if device["id"] == device_id:
+                if device.get("states") == new_state:
+                    return False
+
+                await db[COLLECTION_ROOMS].update_one(
+                    {"room_id": room_id, "devices.id": device_id},
+                    {"$set": {"devices.$.states": new_state}}
+                )
+                return True
+
+        return False
+    except Exception as e:
+        print(f"Erro ao atualizar estado do dispositivo: {e}")
+        return False
+
+async def get_device_state(device_id):
+    try:
+        # Consultar informações gerais do dispositivo
         general_info_response = openapi.get(f"/v2.0/cloud/thing/{device_id}")
-        if isinstance(general_info_response, str):  # Verifica se a resposta é uma string
-            general_info_response = json.loads(general_info_response)  # Parse JSON string
         general_info = general_info_response.get("result", {})
 
-        # 2. Obter propriedades específicas do dispositivo
+        # Consultar propriedades do dispositivo
         properties_response = openapi.get(f"/v2.0/cloud/thing/{device_id}/shadow/properties")
-        if isinstance(properties_response, str): # Verifica se a resposta é uma string
-            properties_response = json.loads(properties_response)  # Parse JSON string
         properties = properties_response.get("result", {}).get("properties", [])
 
-        # 3. Processar os dados do dispositivo
-        state_fields = DEVICE_CONFIGS.get(device_type, {}).get("state_fields", [])
-        device_data = process_device_data(
-            device_id=device_id,
-            general_info=general_info,
-            properties=properties,
-            state_fields=state_fields
-        )
+        device_name = general_info.get("custom_name", "Unnamed Device").strip()  # Remove espaços extras
+        device_config = DEVICE_STATES.get(device_name, {})  # Retorna um dicionário vazio se não encontrar
+        state_fields = device_config.get("state_fields", [])
+
+        # Construir o objeto de dados do dispositivo
+        device_data = {
+            "id": device_id,
+            "name": general_info.get("custom_name", "Unnamed Device"),
+            "category": general_info.get("category", "unknown"),
+            "Online": general_info.get("is_online", False),
+            "states": {}
+        }
+
+        # Preencher os estados com base nos campos relevantes
+        for prop in properties:
+            code = prop.get("code")
+            value = prop.get("value")
+            if code in state_fields:  # Somente incluir os campos configurados
+                device_data["states"][code] = "ON" if value else "OFF"
+
+        print(f"Final Device Data: {device_data}")  # Debug
         return device_data
 
-    except json.JSONDecodeError as e:
-        print(f"Erro ao fazer parse da resposta JSON para o dispositivo {device_id}: {e}")
-        return None
     except Exception as e:
         print(f"Erro ao obter estado do dispositivo {device_id}: {e}")
         return None
 
-def process_device_data(device_id, general_info, properties, state_fields):
-    """
-    Processa os dados do dispositivo com base no tipo e nas propriedades retornadas pela API.
-    """
-    # Dados processados
-    device_data = {
-        "id": device_id,
-        "name": general_info.get("name", "Unnamed Device"),
-        "category": general_info.get("category", "unknown"),
-        "isOnline": general_info.get("is_online", False),
-        "states": {}
-    }
 
-    # Processa os campos de estado específicos
-    for prop in properties:
-        code = prop.get("code")
-        value = prop.get("value")
-
-        if code in state_fields:
-            device_data["states"][code] = "ON" if value else "OFF"
-
-    return device_data
-
-# Endpoint WebSocket para notificações
-@app.websocket("/ws/notifications")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-
-    # Dispositivos do quarto / Projeto Tuya
-    # Esses dados virao do banco de dados quando o cliente, no frontend, adicionar um novo quarto com seus dispositivos
-    # Eh necessario banco de dados pois iremos puxar os dados dele e podemos replicar o sistema em outros hoteis
-    devices = [
-        {
-            "id": "vdevo173316521541939",
-            "type": "lampada",
-        },
-        {
-            "id": "6836066470039f3b913c",
-            "type": "interruptor",
-        }
-    ]
+@app.websocket("/ws/notifications/{room_id}")
+async def websocket_endpoint(websocket: WebSocket, room_id: str):
+    await WebSocketManager.connect(websocket, room_id)
 
     try:
+        # Obtenha informações do quarto do banco de dados
+        room = await db[COLLECTION_ROOMS].find_one({"room_id": room_id})
+        if not room:
+            await websocket.send_json({"error": "Quarto não encontrado."})
+            return
+
+        devices = room.get("devices", [])
+
         while True:
             all_device_states = []
-
             for device in devices:
-                # Envia a solicitação para obter o estado do dispositivo, passando seu ID e seu tipo
-                device_state = await get_device_state(device["id"], device["type"])
+                device_state = await get_device_state(device["id"])
                 if device_state:
-                    all_device_states.append(device_state)
+                    updated = await update_device_state_if_changed(
+                        room_id, device["id"], device_state["states"]
+                    )
+                    print(f"Estado do dispositivo {device_state} atualizado? {updated}")
+                    if updated:
+                        all_device_states.append(device_state)
 
-            # Envia as atualizações para o frontend, e salva no banco de dados nesse formato:
-            # {
-            #     "devices": [
-            #         {
-            #             "id": "vdevo173316521541939",
-            #             "name": "Lampada Inteligente",
-            #             "category": "dj",
-            #             "isOnline": true,
-            #             "states": {
-            #                 "switch_led": "ON"
-            #             }
-            #         },
-            #         {
-            #             "id": "6836066470039f3b913c",
-            #             "name": "Interruptor Inteligente",
-            #             "category": "kg",
-            #             "isOnline": true,
-            #             "states": {
-            #                 "switch_1": "OFF",
-            #                 "switch_2": "ON",
-            #                 "switch_3": "OFF"
-            #             }
-            #         }
-            #     ]
-            # }
+            if all_device_states:
+                message = {
+                    "type": "device_state",
+                    "data": all_device_states
+                }
 
-            # Prepara a mensagem para enviar ao frontend
-            message = {
-                "type": "device_state",
-                "data": all_device_states  # Envia o objeto diretamente, sem json.dumps
-            }
+                print(f"Enviando estados dos dispositivos para {room_id}: {message}")
+                await WebSocketManager.send_to_room(room_id, message)
 
-            await websocket.send_json(message)
-
-            # Aguarda 5 segundos antes de atualizar novamente
             await asyncio.sleep(4.5)
 
     except WebSocketDisconnect:
-        print("WebSocket desconectado")
-
+        WebSocketManager.disconnect(websocket, room_id)
     except Exception as e:
-        print(f"Erro no WebSocket: {e}")
+        print(f"Erro no WebSocket do quarto {room_id}: {e}")
 
-@app.post("/rooms")
+@app.post("/add_rooms")
 async def insert_room_with_devices(room: Room):
-    """
-    Insere um quarto com dispositivos no banco de dados.
-    """
     try:
-        # Converte os objetos Device para dicionários
         room_data = {
             "room_id": room.room_id,
             "connections": [],
-            "devices": [device.dict() for device in room.devices],  # Converte cada Device para dicionário
-            "do_not_disturb": False,
-            "cleaning_requested": False
+            "devices": [device.dict() for device in room.devices],
         }
-
-        print("Dados para inserção no MongoDB:", room_data)
-
-        # Insere os dados no banco de dados
-        result = await db[COLLECTION_ROOMS].insert_one(room_data)
-        print(f"Quarto {room.room_id} inserido com sucesso.")
+        await db[COLLECTION_ROOMS].insert_one(room_data)
         return {"message": f"Quarto {room.room_id} adicionado com sucesso!"}
     except Exception as e:
-        print(f"Erro ao inserir quarto: {str(e)}")
         return {"error": str(e)}
-
-# Função para atualizar o estado do dispositivo na estrutura centralizada
-def update_device_status(room_id, device_id, current_state):
-    """
-    Atualiza o estado de um dispositivo específico na estrutura centralizada `rooms`.
-    """
-    if room_id in websocket_manager.rooms:
-        devices = websocket_manager.rooms[room_id]["devices"]
-        for device in devices:
-            if device["id"] == device_id:
-                device["status"] = current_state  # Atualiza o estado do dispositivo
-                print(f"Estado do dispositivo {device_id} no quarto {room_id} atualizado: {current_state}")
-                return
-    else:
-        print(f"Quarto {room_id} ou dispositivo {device_id} não encontrado na estrutura centralizada.")
 
 @app.get("/devices")
 async def list_devices():
     try:
-        # Faz a chamada para o endpoint de listagem de dispositivos
         response = openapi.get("/v1.3/iot-03/devices")
 
         if response.get("success"):
@@ -266,119 +217,10 @@ async def list_devices():
             detail=f"Erro interno: {str(e)}"
         )
 
-# Endpoint raiz para teste
 @app.get("/")
 async def root():
-    return {"message": "Bem vindo ao painel de controle dos dispositivos Tuya!"}
-@app.post("/devices/{device_id}/freeze")
-async def freeze_device(device_id: str):
-    try:
-        # Configurar payload para a requisição
-        body = {
-            "state": 1  # Define o estado como '1' para congelar o dispositivo
-        }
+    return {"message": "Bem-vindo ao painel de controle dos dispositivos Tuya!"}
 
-        # Faz a chamada à API da Tuya para congelar o dispositivo
-        response = openapi.post(
-            f"/v2.0/cloud/thing/{device_id}/freeze",
-            body  # Passa o payload como dicionário
-        )
-
-        # Verifica se a resposta foi bem-sucedida
-        if response.get("success"):
-            return {"message": f"Dispositivo {device_id} foi congelado com sucesso."}
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Erro ao congelar o dispositivo {device_id}: {response.get('msg')}"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro interno ao tentar congelar o dispositivo: {str(e)}"
-        )
-
-@app.post("/devices/{device_id}/unfreeze")
-async def unfreeze_device(device_id: str):
-    try:
-        # Configurar payload para a requisição
-        body = {
-            "state": 0, # Certifique-se de que "unfreeze" é o código correto para esta ação
-        }
-
-        # Faz a chamada à API da Tuya para descongelar o dispositivo
-        response = openapi.post(
-            f"/v2.0/cloud/thing/{device_id}/freeze", # Endpoint correto
-            body # Passa o payload no formato esperado pela biblioteca
-        )
-
-        # Verifica se a resposta foi bem-sucedida
-        if response.get("success"):
-            return {"message": f"Dispositivo {device_id} foi descongelado com sucesso."}
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Erro ao descongelar o dispositivo {device_id}: {response.get('msg')}"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro interno ao tentar descongelar o dispositivo: {str(e)}"
-        )
-# Enviar comando para ligar o dispositivo
-
-# Enviar comando para desligar o dispositivo
-@app.post("/devices/{device_id}/switch_off")
-async def switch_off_device(device_id: str):
-    try:
-        body = {
-            "properties": {
-                "switch_led": False  # Ajusta a propriedade para desligar
-            }
-        }
-        response = openapi.post(
-            f"/v2.0/cloud/thing/{device_id}/shadow/properties/issue",
-            body
-        )
-
-        if response.get("success"):
-            return {"message": f"Device {device_id} turned off successfully."}
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Error turning off device {device_id}: {response.get('msg')}"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal error: {str(e)}"
-        )
-
-@app.post("/devices/{device_id}/switch_on")
-async def switch_on_device(device_id: str):
-    try:
-        body = {
-            "properties": {
-                "switch_led": True  # Substitua por "switch_1" ou outro código correto
-            }
-        }
-        response = openapi.post(
-            f"/v2.0/cloud/thing/{device_id}/shadow/properties/issue",
-            body
-        )
-
-        if response.get("success"):
-            return {"message": f"Device {device_id} turned on successfully."}
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Error turning on device {device_id}: {response.get('msg')}"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal error: {str(e)}"
-        )
 
 # 1.Add dispositivos IoT no projeto Tuya
 # 2.Listar dispositivos disponíveis
@@ -399,6 +241,62 @@ async def switch_on_device(device_id: str):
 # Device control - Query Properties
 # v2.0/cloud/thing/vdevo173316521541939/shadow/properties?codes=switch_led
 
-# Elimine redundancia do state_fields e do DEVICE_CONFIGS
+
+# 1. Salva no banco de dados o quarto com os dispositivos associados.
+# 2. Puxa quarto pelo deviceID. deviceID eh obtido pelo Tuya Pulsar.
+# 3. Envia mensagem para o quarto especifico via websocket.
+# 4. Salva em uma nova coelcao chamada device_logs.
+
+# 1. Abre websocket para o quarto especifico room_ID.
+# 2. Puxa todas informacoes do quarto ( seus dispositivos )
+# 3. Puxa informacoes do dispositivo via API Tuya.
+# 4. Se houver mudancas -> envia informacoes para o frontend via websocket e salva no BD Se nao, nada atualiza
+#
+# Caso queira re aproveitar o BD em outro hotel, sera necessario remover o device ID ( pois ele eh unico ) e remover os states dos dispositivos. ( esses dados serao atualizados no outro sistema )
 
 
+# No primeiro estagio, o usuario ira salvar somente o quarto e os dispositivos associados a ele.
+# ( retornados do endpoint devices da Tuya API ) ( EXEMPLO ):
+# Exemplo de como sera salvo no banco de dados:
+# {
+#     "room_id": "quarto_1",
+#     "connections": [],
+#     "devices": [
+#         {
+#             "id": "vdevo173316521541939",
+#             "name": "Lampada Inteligente",
+#             "category": "dj",
+#             "Online": true,
+#             "states": {}
+#         }
+#     ]
+# }
+
+# No estagio final, sera salvo assim no banco de dados, depois de obter os estados ( EXEMPLO ):
+# Exemplo de como sera salvo no banco de dados:
+# {
+#     "room_id": "quarto_1",
+#     "connections": [],
+#     "devices": [
+#         {
+#             "id": "vdevo173316521541939",
+#             "name": "Lampada Inteligente",
+#             "category": "dj",
+#             "isOnline": true,
+#             "states": {
+#                 "switch_led": "ON"
+#             }
+#         },
+#         {
+#             "id": "6836066470039f3b913c",
+#             "name": "Interruptor Inteligente",
+#             "category": "kg",
+#             "isOnline": true,
+#             "states": {
+#                 "switch_1": "OFF",
+#                 "switch_2": "ON",
+#                 "switch_3": "OFF"
+#             }
+#         }
+#     ]
+# }

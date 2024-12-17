@@ -1,12 +1,15 @@
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Optional, Dict
 
-# Estrutura de dados das variaveis passadas do frontend para o backend salvar no BD, deve seguir esse padrao
 class Device(BaseModel):
     id: str
     name: str
-    status: str
+    category_name: str
+    category: str
+    online: bool
+    states: Optional[Dict[str, str]] = None # Deixa os states opcionais
 
 class Room(BaseModel):
     room_id: str
+    connections: List[str] = None
     devices: List[Device]

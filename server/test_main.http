@@ -2,31 +2,27 @@ GET http://127.0.0.1:8000/
 Accept: application/json
 ###
 
-GET http://127.0.0.1:8000/vdevo173316521541939/properties
-Accept: application/json
-###
-
-POST http://127.0.0.1:8000/devices/vdevo173316521541939/freeze
+POST http://127.0.0.1:8000/api/devices/vdevo173316521541939/freeze
 Content-Type: application/json
 Accept: application/json
 ###
 
-POST http://127.0.0.1:8000/devices/vdevo173316521541939/unfreeze
+POST http://127.0.0.1:8000/api/devices/vdevo173316521541939/unfreeze
 Content-Type: application/json
 Accept: application/json
 ###
 
-PUT http://127.0.0.1:8000/devices/vdevo173316521541939/turn-off
+PUT http://127.0.0.1:8000/api/devices/vdevo173316521541939/turn-off
 Content-Type: application/json
 Accept: application/json
 ###
 
-POST http://127.0.0.1:8000/devices/vdevo173316521541939/switch_off
+POST http://127.0.0.1:8000/api/devices/vdevo173316521541939/switch_off
 Content-Type: application/json
 Accept: application/json
 ###
 
-POST http://127.0.0.1:8000/devices/vdevo173316521541939/switch_on
+POST http://127.0.0.1:8000/api/devices/vdevo173316521541939/switch_on
 Content-Type: application/json
 Accept: application/json
 ###
@@ -35,15 +31,47 @@ GET http://127.0.0.1:8000/devices
 Accept: application/json
 ###
 
-POST http://127.0.0.1:8000/rooms
+GET http://127.0.0.1:8000/rooms
+Accept: application/json
+###
+
+POST http://127.0.0.1:8000/add_rooms
 Content-Type: application/json
 Accept: application/json
 
-{
-  "room_id": "room_102",
-  "devices": [
-    {"id": "vdevo173316521541939", "name": "Air Conditioner", "switch_led": "ON", "category": "dj", "isOnline": "true" }
-  ]
-}
+ {
+     "room_id": "quarto_1",
+     "connections": [],
+     "devices": [
+         {
+             "id": "vdevo173316521541939",
+             "name": "Lâmpada Inteligente",
+             "category_name": "Switch",
+             "category": "dj",
+             "online": true,
+             "states": {}
+         }
+     ]
+ }
 
 ###
+
+POST http://127.0.0.1:8000/add_rooms
+Content-Type: application/json
+Accept: application/json
+
+ {
+     "room_id": "quarto_2",
+     "connections": [],
+     "devices": [
+         {
+             "id": "6836066470039f3b913c",
+             "name": "Interruptor",
+             "category_name": "Switch",
+             "category": "kg",
+             "online": true,
+             "states": {}
+         }
+     ]
+ }
+

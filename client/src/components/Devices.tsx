@@ -9,17 +9,26 @@ const Devices = () => {
     const [error, setError] = useState("");
     const [notifications, setNotifications] = useState<string[]>([]);
     const [processingDevice, setProcessingDevice] = useState<string | null>(null); // Gerencia o estado de processamento de um dispositivo específico
+    const [roomNumber, setRoomNumber] = useState("");
+    const room_id = "quarto_1";
 
     useEffect(() => {
         const connectWebSocket = () => {
-            const ws = new WebSocket("ws://localhost:8000/ws/notifications");
+            const ws = new WebSocket(`ws://localhost:8000/ws/notifications/${room_id}`);
+            console.log("conectado ao websocket👌")
+            setRoomNumber(room_id);
 
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
                     console.log("Dados recebidos do WebSocket:", data);
 
+                    if (!data.type) {
+                        throw new Error("Certifique-se de que o Banco de Dados possui quartos..."); // Verifica se o objeto possui a chave "type"
+                    }
+
                     if (data.type === "pulsar_notification") {
+                        console.log("Notificação Tuya recebida:", data.data); // Log para notificação
                         const notificationMessage = `Atualização recebida: ${JSON.stringify(data.data)}`;
                         setNotifications((prev) => {
                             const newNotifications = [...prev, notificationMessage];
@@ -99,7 +108,7 @@ const Devices = () => {
     return (
         <Box sx={{ padding: 2 }}>
             <Typography variant="h5" gutterBottom>
-                Painel de Dispositivos
+                Painel de Dispositivos do quarto {roomNumber}
             </Typography>
 
             {devices.length > 0 ? (
