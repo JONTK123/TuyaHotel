@@ -1,16 +1,21 @@
 import React from "react";
-import {Typography, Container} from "@mui/material";
-import Devices from "../components/Devices";
+import { Container, Box } from "@mui/material";
+import Rooms from "../components/Rooms";
 
 const Dashboard = () => {
-     return (
-        <Container sx={{ marginTop: 4 }}>
-          <Typography variant="h4" gutterBottom>
-            Painel de Dispositivos
-          </Typography>
-          <Devices/>
-        </Container>
-     );
+    return (
+        <Box
+            sx={{
+                backgroundColor: "#000", // Fundo preto
+                minHeight: "100vh", // Garante que o fundo preto cubra toda a altura da tela
+                padding: 2,
+            }}
+        >
+            <Container sx={{ marginTop: 4 }}>
+                <Rooms />
+            </Container>
+        </Box>
+    );
 };
 
 export default Dashboard;

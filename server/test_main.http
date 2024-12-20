@@ -47,7 +47,6 @@ Accept: application/json
              "name": "Lâmpada Inteligente",
              "category_name": "Switch",
              "category": "dj",
-             "online": true,
              "states": {}
          }
      ]
@@ -62,17 +61,25 @@ Accept: application/json
  {
      "room_id": "quarto_2",
      "devices": [
+                {
+             "id": "vdevo173455209899022",
+             "name": "Interruptor_quarto",
+             "category_name": "Switch",
+             "category": "kg",
+             "states": {}
+         },
          {
              "id": "6836066470039f3b913c",
              "name": "Interruptor",
              "category_name": "Switch",
              "category": "kg",
+                        "online": true,
+
              "online": true,
              "states": {}
          }
      ]
  }
-
 ###
 
 POST http://127.0.0.1:8000/add_rooms
@@ -87,7 +94,6 @@ Accept: application/json
              "name": "Interruptor",
              "category_name": "Switch",
              "category": "kg",
-             "online": true,
              "states": {}
          },
             {
@@ -95,8 +101,52 @@ Accept: application/json
                 "name": "Lâmpada Inteligente",
                 "category_name": "Switch",
                 "category": "dj",
-                "online": true,
                 "states": {}
             }
      ]
  }
+###
+
+POST http://127.0.0.1:8000/api/devices/vdevo173455209899022/DoNotDisturbActivate
+Content-Type: application/json
+Accept: application/json
+###
+
+POST http://127.0.0.1:8000/api/devices/vdevo173455209899022/DoNotDisturbDeactivate
+Content-Type: application/json
+Accept: application/json
+###
+
+POST http://127.0.0.1:8000/api/devices/vdevo173455209899022/CleaningActivate
+Content-Type: application/json
+Accept: application/json
+###
+
+POST http://127.0.0.1:8000/api/devices/vdevo173455209899022/CleaningDeactivate
+Content-Type: application/json
+Accept: application/json
+###
+
+POST http://127.0.0.1:8000/api/devices/vdevo173455209899022/BellActivate
+Content-Type: application/json
+Accept: application/json
+###
+
+POST http://127.0.0.1:8000/api/devices/vdevo173455209899022/BellDeactivate
+Content-Type: application/json
+Accept: application/json
+###
+
+DELETE http://127.0.0.1:8000/delete_room/
+Content-Type: application/json
+Accept: application/json
+###
+
+
+
+
+
+
+
+
+

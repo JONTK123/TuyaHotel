@@ -1,18 +1,17 @@
-import React from 'react';
-import {BrowserRouter as Router, Route, Routes} from "react-router-dom";
-import {CssBaseline} from "@mui/material";
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
+import Devices from "./components/Devices";
 
-function App() {
-  return (
-    <Router>
-      <CssBaseline /> {/* Define estilos globais do Material-UI */}
-      <Routes>
-        {/* Rota para a página principal */}
-        <Route path="/" element={<Dashboard />} />
-      </Routes>
-    </Router>
-  );
+const App = () => {
+    return (
+        <Router>
+            <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/devices/:roomId" element={<Devices />} />
+            </Routes>
+        </Router>
+    );
 };
 
 export default App;

@@ -144,7 +144,7 @@ async def get_device_state(device_id):
         print(f"Erro ao obter estado do dispositivo {device_id}: {e}")
         return None
 
-@app.websocket("/ws/notifications/{room_id}")
+@app.websocket("/ws/device_panel/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
     await WebSocketManager.connect(websocket, room_id)
 
@@ -192,6 +192,44 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
         WebSocketManager.disconnect(websocket, room_id)
     except Exception as e:
         print(f"Erro no WebSocket do quarto {room_id}: {e}")
+
+@app.websocket("/ws/central_monitor")
+async def central_monitor_websocket(websocket: WebSocket):
+    await WebSocketManager.connect(websocket, "central_monitor")
+
+    try:
+        while True:
+            # Consultar o banco de dados periodicamente
+            rooms = await db[COLLECTION_ROOMS].find().to_list(1000)
+            if rooms:
+                data = [
+                    {
+                        "room_id": room["room_id"],
+                        "devices": room["devices"],
+                    }
+                    for room in rooms
+                ]
+
+                message = {
+                    "type": "room_switch",
+                    "data": data
+                }
+
+                await websocket.send_json(message)
+
+            else:
+                message = {
+                    "type": "error",
+                    "data": "Nenhum quarto encontrado no banco de dados."
+                }
+                await websocket.send_json(message)
+
+            await asyncio.sleep(2)  # Intervalo de 2 segundos
+    except WebSocketDisconnect:
+        WebSocketManager.disconnect(websocket, "central_monitor")
+    except Exception as e:
+        print(f"Erro no WebSocket do monitor central: {e}")
+
 
 @app.post("/add_rooms")
 async def insert_room_with_devices(room: Room):
@@ -248,10 +286,41 @@ async def list_devices():
             detail=f"Erro interno: {str(e)}"
         )
 
+def convert_objectid_to_str(room):
+    if "_id" in room:
+        room["_id"] = str(room["_id"])
+    return room
+
+@app.get("/rooms")
+async def list_rooms():
+    try:
+        # Consulta todos os quartos no banco de dados
+        rooms = await db[COLLECTION_ROOMS].find().to_list(1000)
+
+        # Converte ObjectId para string
+        rooms = [convert_objectid_to_str(room) for room in rooms]
+
+        # Retorna a lista de quartos
+        return rooms
+    except Exception as e:
+        print(f"Erro ao listar quartos: {e}")  # Log do erro no console
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao listar quartos: {str(e)}"
+        )
+
+@app.delete("/delete_room/{room_id}")
+async def delete_room(room_id: str):
+    try:
+        result = await db[COLLECTION_ROOMS].delete_one({"room_id": room_id})
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Room not found")
+        return {"message": f"Room {room_id} deleted successfully!"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting room: {str(e)}")
 @app.get("/")
 async def root():
     return {"message": "Bem-vindo ao painel de controle dos dispositivos Tuya!"}
-
 
 # 1.Add dispositivos IoT no projeto Tuya
 # 2.Listar dispositivos disponíveis

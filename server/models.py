@@ -6,7 +6,6 @@ class Device(BaseModel):
     name: str
     category_name: str
     category: str
-    online: bool
     states: Optional[Dict[str, str]] = None # Deixa os states opcionais
 
 class Room(BaseModel):
