@@ -8,6 +8,8 @@ from server.device_control import router as device_control_router
 from server.websocket_manager import WebSocketManager
 import asyncio
 
+from tests.MockTuyaAPI import MockTuyaAPI
+
 load_dotenv()
 app = FastAPI()
 
@@ -34,7 +36,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-openapi = initialize_tuya_openapi()
+# openapi = initialize_tuya_openapi()
+openapi = MockTuyaAPI()
+
 
 # Configurações de dispositivos
 DEVICE_STATES = {
@@ -205,7 +209,20 @@ async def central_monitor_websocket(websocket: WebSocket):
                 data = [
                     {
                         "room_id": room["room_id"],
-                        "devices": room["devices"],
+                        "devices": [
+                            {
+                                "id": device["id"],
+                                "name": device["name"],
+                                "category_name": device["category_name"],
+                                "category": device["category"],
+                                "states": {
+                                    "do_not_disturb": (device.get("states") or {}).get("switch_1", "OFF"),
+                                    "cleaning": (device.get("states") or {}).get("switch_2", "OFF"),
+                                    "bell": (device.get("states") or {}).get("switch_3", "OFF")
+                                } if device["name"] == "NH-YM 蓝牙mesh 2L 单零火-vdevo" else device["states"]
+                            }
+                            for device in room["devices"]
+                        ],
                     }
                     for room in rooms
                 ]
@@ -229,7 +246,6 @@ async def central_monitor_websocket(websocket: WebSocket):
         WebSocketManager.disconnect(websocket, "central_monitor")
     except Exception as e:
         print(f"Erro no WebSocket do monitor central: {e}")
-
 
 @app.post("/add_rooms")
 async def insert_room_with_devices(room: Room):
@@ -268,6 +284,29 @@ async def insert_room_with_devices(room: Room):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# @app.post("/add_rooms")
+# async def insert_room_with_devices(room: Room):
+#     try:
+#         room_data = {
+#             "room_id": room.room_id,
+#             "devices": [device.dict() for device in room.devices],
+#         }
+#         print(f"Dados processados para salvar: {room_data}")  # Log do que será salvo
+#
+#         existing_room = await db[COLLECTION_ROOMS].find_one({"room_id": room.room_id})
+#         if existing_room:
+#             print(f"Quarto já existe: {existing_room}")  # Quarto encontrado no BD
+#             # Atualiza o quarto existente
+#             ...
+#         else:
+#             print("Inserindo novo quarto no banco de dados.")  # Inserindo novo quarto
+#             await db[COLLECTION_ROOMS].insert_one(room_data)
+#
+#         return {"message": f"Quarto {room.room_id} adicionado ou atualizado com sucesso!"}
+#     except Exception as e:
+#         print(f"Erro ao adicionar ou atualizar quarto: {e}")  # Log do erro
+#         raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/devices")
 async def list_devices():
     try:
@@ -285,6 +324,178 @@ async def list_devices():
             status_code=500,
             detail=f"Erro interno: {str(e)}"
         )
+
+# ---------------------------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------------------------------------
+
+# APENAS PARA TESTE
+# @app.get("/devices")
+# async def list_devices():
+#     try:
+#
+#         DEVICES = {
+#     "58d66e312239423c83d162d7": {
+#         "name": "Lâmpada Inteligente",
+#         "category_name": "Light Source",
+#         "category": "dj"
+#     },
+#     "df4e4271a56d42a6a0633972": {
+#         "name": "Interruptor",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "e2ea663b37e24557ba4b3009": {
+#         "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "3240228c2c2a45acb123baff": {
+#         "name": "Lâmpada Inteligente",
+#         "category_name": "Light Source",
+#         "category": "dj"
+#     },
+#     "b26389a806c24f56b83ef1f6": {
+#         "name": "Interruptor",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "3d8f2037d7eb4e058cabf187": {
+#         "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "cf0a78969a3d49eebfb3d8c3": {
+#         "name": "Lâmpada Inteligente",
+#         "category_name": "Light Source",
+#         "category": "dj"
+#     },
+#     "f6ea3eb8bf404b36a0744ad5": {
+#         "name": "Interruptor",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "c49dcc55ba7f437092304714": {
+#         "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "d8f8a6497a794e6c8d3be235": {
+#         "name": "Lâmpada Inteligente",
+#         "category_name": "Light Source",
+#         "category": "dj"
+#     },
+#     "80bb2ab393a44c4ab2f3f488": {
+#         "name": "Interruptor",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "8e140d4ac98248d987393697": {
+#         "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "d5a034bd4e3f4fdb853f705c": {
+#         "name": "Lâmpada Inteligente",
+#         "category_name": "Light Source",
+#         "category": "dj"
+#     },
+#     "9e1a971d43b3454688f36111": {
+#         "name": "Interruptor",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "48d20963bd474f37882888bf": {
+#         "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "441b8a5a859b4c39abf1ca53": {
+#         "name": "Lâmpada Inteligente",
+#         "category_name": "Light Source",
+#         "category": "dj"
+#     },
+#     "c7915e8ed9cc42bca03ebab2": {
+#         "name": "Interruptor",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "c1ac7c76b1674ac0ae606774": {
+#         "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "2ba7a3b9ae274294999aa195": {
+#         "name": "Lâmpada Inteligente",
+#         "category_name": "Light Source",
+#         "category": "dj"
+#     },
+#     "64bb3609545e4f26919b5d46": {
+#         "name": "Interruptor",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "aaa15d99a65041a183e483d4": {
+#         "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "958358bf3a064e8389b4692f": {
+#         "name": "Lâmpada Inteligente",
+#         "category_name": "Light Source",
+#         "category": "dj"
+#     },
+#     "93ba79e535854ba2b38f71c9": {
+#         "name": "Interruptor",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "d55e44b3a45440078775c72b": {
+#         "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "185ea02374414cef9ca73873": {
+#         "name": "Lâmpada Inteligente",
+#         "category_name": "Light Source",
+#         "category": "dj"
+#     },
+#     "c8fece608e024ecf9c53feea": {
+#         "name": "Interruptor",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "be08d674a0c84ab08375c123": {
+#         "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "ddd5b18b75014124b9facf50": {
+#         "name": "Lâmpada Inteligente",
+#         "category_name": "Light Source",
+#         "category": "dj"
+#     },
+#     "7c8109c10cbf49639990afcb": {
+#         "name": "Interruptor",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     },
+#     "783d0c451505455b9d047338": {
+#         "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+#         "category_name": "Switch",
+#         "category": "kg"
+#     }
+#         }
+#
+#         # Converter o dicionário em uma lista
+#         devices_list = [{"id": device_id, **device} for device_id, device in DEVICES.items()]
+#
+#         return {"devices": devices_list}
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Erro ao listar dispositivos: {str(e)}"
+#         )
+
 
 def convert_objectid_to_str(room):
     if "_id" in room:

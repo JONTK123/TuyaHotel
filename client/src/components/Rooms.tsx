@@ -39,7 +39,7 @@ interface Room {
 const Rooms: React.FC = () => {
     const [rooms, setRooms] = useState<Room[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
     const [dialogOpen, setDialogOpen] = useState(false);
     const [newRoomId, setNewRoomId] = useState("");
@@ -52,7 +52,7 @@ const Rooms: React.FC = () => {
 
     useEffect(() => {
         setRooms([]);
-        setError("");
+        setError(null);
         setLoading(true);
         const ws = new WebSocket("ws://localhost:8000/ws/central_monitor");
 
@@ -148,8 +148,8 @@ const Rooms: React.FC = () => {
                     name: device.name,
                     category_name: device.category_name,
                     category: device.category,
-                    states: device.states
-                }))
+                    states: device.states || {}, // Inicializar como {} se não estiver definido
+                })),
             };
 
             await axios.post("http://127.0.0.1:8000/add_rooms", roomData);

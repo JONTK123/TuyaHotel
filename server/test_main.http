@@ -142,11 +142,128 @@ Content-Type: application/json
 Accept: application/json
 ###
 
+POST http://127.0.0.1:8000/add_rooms
+Content-Type: application/json
+Accept: application/json
 
+{
+  "room_id": "300",
+  "devices": [
+    {
+      "id": "vdevo173455209899022",
+      "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+      "category_name": "Switch",
+      "category": "kg",
+      "states": {
+        "switch_1": "ON",
+        "switch_2": "OFF",
+        "switch_3": "OFF"
+      }
+    },
+    {
+      "id": "vdevo173316521541939",
+      "name": "Lâmpada Inteligente",
+      "category_name": "Light Source",
+      "category": "dj",
+      "states": {
+        "switch_led": "ON"
+      }
+    },
+    {
+      "id": "6836066470039f3b913c",
+      "name": "Interruptor",
+      "category_name": "Switch",
+      "category": "kg",
+      "states": {
+        "switch_1": "OFF",
+        "switch_2": "OFF",
+        "switch_3": "OFF"
+      }
+    }
+  ]
+}
 
+###
+POST http://127.0.0.1:8000/add_rooms
+Content-Type: application/json
+Accept: application/json
 
+{
+  "room_id": "301",
+  "devices": [
+    {
+      "id": "vdevo173455209899022",
+      "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+      "category_name": "Switch",
+      "category": "kg",
+      "states": {
+        "switch_1": "OFF",
+        "switch_2": "ON",
+        "switch_3": "OFF"
+      }
+    },
+    {
+      "id": "vdevo173316521541939",
+      "name": "Lâmpada Inteligente",
+      "category_name": "Light Source",
+      "category": "dj",
+      "states": {
+        "switch_led": "ON"
+      }
+    },
+    {
+      "id": "6836066470039f3b913c",
+      "name": "Interruptor",
+      "category_name": "Switch",
+      "category": "kg",
+      "states": {
+        "switch_1": "OFF",
+        "switch_2": "OFF",
+        "switch_3": "OFF"
+      }
+    }
+  ]
+}
 
+###
+POST http://127.0.0.1:8000/add_rooms
+Content-Type: application/json
+Accept: application/json
 
-
-
+{
+  "room_id": "302",
+  "devices": [
+    {
+      "id": "vdevo173455209899022",
+      "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+      "category_name": "Switch",
+      "category": "kg",
+      "states": {
+        "switch_1": "OFF",
+        "switch_2": "OFF",
+        "switch_3": "ON"
+      }
+    },
+    {
+      "id": "vdevo173316521541939",
+      "name": "Lâmpada Inteligente",
+      "category_name": "Light Source",
+      "category": "dj",
+      "states": {
+        "switch_led": "ON"
+      }
+    },
+    {
+      "id": "6836066470039f3b913c",
+      "name": "Interruptor",
+      "category_name": "Switch",
+      "category": "kg",
+      "states": {
+        "switch_1": "OFF",
+        "switch_2": "OFF",
+        "switch_3": "OFF"
+      }
+    }
+  ]
+}
 
