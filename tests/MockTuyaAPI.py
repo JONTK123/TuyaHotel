@@ -14,28 +14,31 @@ class MockTuyaAPI:
                 "id": "vdevo173316521541939",
                 "name": "Lampada Inteligente",
                 "category": "dj",
+                "category_name": "Lampada",
                 "states": {
-                    "switch_led": True
+                    "switch_led": "ON"
                 },
             },
             "6836066470039f3b913c": {
                 "id": "6836066470039f3b913c",
                 "name": "Interruptor Inteligente",
                 "category": "kg",
+                "category_name": "Switch",
                 "states": {
-                    "switch_1": False,
-                    "switch_2": False,
-                    "switch_3": False
+                    "switch_1": "OFF",
+                    "switch_2": "OFF",
+                    "switch_3": "OFF"
                 },
             },
             "vdevo173455209899022": {
                 "id": "vdevo173455209899022",
                 "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
                 "category": "kg",
+                "category_name": "Switch",
                 "states": {
-                    "switch_1": False,
-                    "switch_2": False,
-                    "switch_3": False
+                    "switch_1": "OFF",
+                    "switch_2": "OFF",
+                    "switch_3": "OFF"
                 },
             },
         }

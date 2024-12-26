@@ -197,6 +197,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
     except Exception as e:
         print(f"Erro no WebSocket do quarto {room_id}: {e}")
 
+# COLOCAR O NOME DO SWITHC DE NAO PERTURBE ETC CORRETAMENTE AQUI PARA FUNCIONAR
 @app.websocket("/ws/central_monitor")
 async def central_monitor_websocket(websocket: WebSocket):
     await WebSocketManager.connect(websocket, "central_monitor")

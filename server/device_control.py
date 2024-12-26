@@ -1,12 +1,13 @@
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
-
+from tests.MockTuyaAPI import MockTuyaAPI
 from server.database import COLLECTION_ROOMS, db
 from server.tuya_setup import initialize_tuya_openapi
 
 router = APIRouter()
 
-openapi = initialize_tuya_openapi()
+# openapi = initialize_tuya_openapi()
+openapi = MockTuyaAPI()
 
 load_dotenv()
 @router.post("/devices/{device_id}/freeze")
