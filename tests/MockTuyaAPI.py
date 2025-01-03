@@ -1,4 +1,6 @@
 import asyncio
+from unittest import result
+from dotenv import load_dotenv
 from fastapi import HTTPException, APIRouter
 from server.websocket_manager import WebSocketManager
 from server.database import db, COLLECTION_ROOMS, COLLECTION_DEVICE_LOGS
@@ -6,6 +8,7 @@ from server.tuya_setup import initialize_tuya_openapi
 
 router = APIRouter()
 openapi = initialize_tuya_openapi()
+load_dotenv()
 
 class MockTuyaAPI:
     def __init__(self):
@@ -32,7 +35,106 @@ class MockTuyaAPI:
             },
             "vdevo173455209899022": {
                 "id": "vdevo173455209899022",
-                "name": "NH-YM 蓝牙mesh 2L 单零火-vdevo",
+                "name": "Interruptor Quarto 1",
+                "category": "kg",
+                "category_name": "Switch",
+                "states": {
+                    "switch_1": "OFF",
+                    "switch_2": "OFF",
+                    "switch_3": "OFF"
+                },
+            },
+            "vdevo173455209899023": {
+                "id": "vdevo173455209899023",
+                "name": "Interruptor Quarto 2",
+                "category": "kg",
+                "category_name": "Switch",
+                "states": {
+                    "switch_1": "OFF",
+                    "switch_2": "OFF",
+                    "switch_3": "OFF"
+                },
+            },
+            "vdevo173455209899024": {
+                "id": "vdevo173455209899024",
+                "name": "Interruptor Quarto 3",
+                "category": "kg",
+                "category_name": "Switch",
+                "states": {
+                    "switch_1": "OFF",
+                    "switch_2": "OFF",
+                    "switch_3": "OFF"
+                },
+            },
+            "vdevo173455209899025": {
+                "id": "vdevo173455209899025",
+                "name": "Interruptor Quarto 4",
+                "category": "kg",
+                "category_name": "Switch",
+                "states": {
+                    "switch_1": "OFF",
+                    "switch_2": "OFF",
+                    "switch_3": "OFF"
+                },
+            },
+            "vdevo173455209899026": {
+                "id": "vdevo173455209899026",
+                "name": "Interruptor Quarto 5",
+                "category": "kg",
+                "category_name": "Switch",
+                "states": {
+                    "switch_1": "OFF",
+                    "switch_2": "OFF",
+                    "switch_3": "OFF"
+                },
+            },
+            "vdevo173455209899027": {
+                "id": "vdevo173455209899027",
+                "name": "Interruptor Quarto 6",
+                "category": "kg",
+                "category_name": "Switch",
+                "states": {
+                    "switch_1": "OFF",
+                    "switch_2": "OFF",
+                    "switch_3": "OFF"
+                },
+            },
+            "vdevo173455209899028": {
+                "id": "vdevo173455209899028",
+                "name": "Interruptor Quarto 7",
+                "category": "kg",
+                "category_name": "Switch",
+                "states": {
+                    "switch_1": "OFF",
+                    "switch_2": "OFF",
+                    "switch_3": "OFF"
+                },
+            },
+            "vdevo173455209899029": {
+                "id": "vdevo173455209899029",
+                "name": "Interruptor Quarto 8",
+                "category": "kg",
+                "category_name": "Switch",
+                "states": {
+                    "switch_1": "OFF",
+                    "switch_2": "OFF",
+                    "switch_3": "OFF"
+                },
+            },
+            "vdevo1734552098990210": {
+                "id": "vdevo1734552098990210",
+                "name": "Interruptor Quarto 9",
+                "category": "kg",
+                "category_name": "Switch",
+                "states": {
+                    "switch_1": "OFF",
+                    "switch_2": "OFF",
+                    "switch_3": "OFF"
+                },
+            },
+            "vdevo1734552098990211": {
+                "id": "vdevo1734552098990211",
+                "name": "Interruptor Quarto 10",
                 "category": "kg",
                 "category_name": "Switch",
                 "states": {
@@ -82,7 +184,7 @@ class MockTuyaAPI:
             if "switch_led" in body.get("properties", {}):
                 self.devices[device_id]["states"]["switch_led"] = body["properties"]["switch_led"]
             if body.get("switch_code") in self.devices[device_id]["states"]:
-                self.devices[device_id]["states"][body["switch_code"]] = body["switchEnable"]
+                self.devices[device_id]["states"][body["switch_code"]] = "ON" if body["switchEnable"] else "OFF"
             return {"success": True}
         return {"success": False, "msg": "Device not found"}
 
@@ -230,123 +332,163 @@ async def switch_on_device(device_id: str):
             status_code=500,
             detail=f"Internal error: {str(e)}"
         )
-
-@router.post("/devices/{device_id}/DoNotDisturbActivate")
-async def do_not_disturb_activate(device_id: str):
-    try:
-        response = openapi.post(
-            f"/v1.0/electric-energy/{device_id}/actions/switch",
-            {"switchEnable": True, "switch_code": "switch_1"}
-        )
-        if response.get("success"):
-            return {"message": f"Device {device_id} switched successfully."}
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Error switching device {device_id}: {response.get('msg')}"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal error: {str(e)}"
-        )
-
-@router.post("/devices/{device_id}/DoNotDisturbDeactivate")
-async def do_not_disturb_deactivate(device_id: str):
-    try:
-        response = openapi.post(
-            f"/v1.0/electric-energy/{device_id}/actions/switch",
-            {"switchEnable": False, "switch_code": "switch_1"}
-        )
-        if response.get("success"):
-            return {"message": f"Device {device_id} switched successfully."}
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Error switching device {device_id}: {response.get('msg')}"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal error: {str(e)}"
-        )
-
-@router.post("/devices/{device_id}/CleaningActivate")
-async def cleaning_activate(device_id: str):
-    try:
-        response = openapi.post(
-            f"/v1.0/electric-energy/{device_id}/actions/switch",
-            {"switchEnable": True, "switch_code": "switch_2"}
-        )
-        if response.get("success"):
-            return {"message": f"Device {device_id} switched successfully."}
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Error switching device {device_id}: {response.get('msg')}"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal error: {str(e)}"
-        )
-
-@router.post("/devices/{device_id}/CleaningDeactivate")
-async def cleaning_deactivate(device_id: str):
-    try:
-        response = openapi.post(
-            f"/v1.0/electric-energy/{device_id}/actions/switch",
-            {"switchEnable": False, "switch_code": "switch_2"}
-        )
-        if response.get("success"):
-            return {"message": f"Device {device_id} switched successfully."}
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Error switching device {device_id}: {response.get('msg')}"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal error: {str(e)}"
-        )
-
-@router.post("/devices/{device_id}/BellActivate")
-async def bell_activate(device_id: str):
-    try:
-        response = openapi.post(
-            f"/v1.0/electric-energy/{device_id}/actions/switch",
-            {"switchEnable": True, "switch_code": "switch_3"}
-        )
-        if response.get("success"):
-            return {"message": f"Device {device_id} switched successfully."}
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Error switching device {device_id}: {response.get('msg')}"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal error: {str(e)}"
-        )
-
-@router.post("/devices/{device_id}/BellDeactivate")
-async def bell_deactivate(device_id: str):
-    try:
-        response = openapi.post(
-            f"/v1.0/electric-energy/{device_id}/actions/switch",
-            {"switchEnable": False, "switch_code": "switch_3"}
-        )
-        if response.get("success"):
-            return {"message": f"Device {device_id} switched successfully."}
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Error switching device {device_id}: {response.get('msg')}"
-            )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Internal error: {str(e)}"
-        )
+#
+# @router.post("/devices/{device_id}/DoNotDisturbActivate")
+# async def do_not_disturb_activate(device_id: str):
+#     print(f"Attempting to switch device {device_id} to ON.")
+#     try:
+#         response = openapi.post(
+#             f"/v1.0/electric-energy/{device_id}/actions/switch",
+#             {"switchEnable": True, "switch_code": "switch_1"}
+#         )
+#         if response.get("success"):
+#             await db[COLLECTION_ROOMS].update_one(
+#                 {"devices.id": device_id},
+#                 {"$set": {"devices.$.states.switch_1": "ON"}}
+#             )
+#
+#             return {"message": f"Device {device_id} switched successfully."}
+#         else:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail=f"Error switching device {device_id}: {response.get('msg')}"
+#             )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Internal error: {str(e)}"
+#         )
+#
+# @router.post("/devices/{device_id}/DoNotDisturbDeactivate")
+# async def do_not_disturb_deactivate(device_id: str):
+#     try:
+#         response = openapi.post(
+#             f"/v1.0/electric-energy/{device_id}/actions/switch",
+#             {"switchEnable": False, "switch_code": "switch_1"}
+#         )
+#         if response.get("success"):
+#
+#             await db[COLLECTION_ROOMS].update_one(
+#                 {"devices.id": device_id},
+#                 {"$set": {"devices.$.states.switch_1": "OFF"}}
+#             )
+#             print(f"Update result for device {device_id}: {result.modified_count} document(s) modified.")
+#
+#             return {"message": f"Device {device_id} switched successfully."}
+#         else:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail=f"Error switching device {device_id}: {response.get('msg')}"
+#             )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Internal error: {str(e)}"
+#         )
+#
+# @router.post("/devices/{device_id}/CleaningActivate")
+# async def cleaning_activate(device_id: str):
+#     try:
+#         response = openapi.post(
+#             f"/v1.0/electric-energy/{device_id}/actions/switch",
+#             {"switchEnable": True, "switch_code": "switch_2"}
+#         )
+#         if response.get("success"):
+#             print(f"Attempting to update device {device_id} state to ON in the database.")
+#
+#             await db[COLLECTION_ROOMS].update_one(
+#                 {"devices.id": device_id},
+#                 {"$set": {"devices.$.states.switch_2": "ON"}}
+#             )
+#             print(f"Update result for device {device_id}: {result.modified_count} document(s) modified.")
+#
+#             return {"message": f"Device {device_id} switched successfully."}
+#         else:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail=f"Error switching device {device_id}: {response.get('msg')}"
+#             )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Internal error: {str(e)}"
+#         )
+#
+# @router.post("/devices/{device_id}/CleaningDeactivate")
+# async def cleaning_deactivate(device_id: str):
+#     try:
+#         response = openapi.post(
+#             f"/v1.0/electric-energy/{device_id}/actions/switch",
+#             {"switchEnable": False, "switch_code": "switch_2"}
+#         )
+#         if response.get("success"):
+#             print(f"Attempting to update device {device_id} state to OFF in the database.")
+#
+#             await db[COLLECTION_ROOMS].update_one(
+#                 {"devices.id": device_id},
+#                 {"$set": {"devices.$.states.switch_2": "OFF"}}
+#             )
+#
+#             return {"message": f"Device {device_id} switched successfully."}
+#         else:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail=f"Error switching device {device_id}: {response.get('msg')}"
+#             )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Internal error: {str(e)}"
+#         )
+#
+# @router.post("/devices/{device_id}/BellActivate")
+# async def bell_activate(device_id: str):
+#     try:
+#         response = openapi.post(
+#             f"/v1.0/electric-energy/{device_id}/actions/switch",
+#             {"switchEnable": True, "switch_code": "switch_3"}
+#         )
+#         if response.get("success"):
+#
+#             await db[COLLECTION_ROOMS].update_one(
+#                 {"devices.id": device_id},
+#                 {"$set": {"devices.$.states.switch_3": "ON"}}
+#             )
+#
+#             return {"message": f"Device {device_id} switched successfully."}
+#         else:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail=f"Error switching device {device_id}: {response.get('msg')}"
+#             )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Internal error: {str(e)}"
+#         )
+#
+# @router.post("/devices/{device_id}/BellDeactivate")
+# async def bell_deactivate(device_id: str):
+#     try:
+#         response = openapi.post(
+#             f"/v1.0/electric-energy/{device_id}/actions/switch",
+#             {"switchEnable": False, "switch_code": "switch_3"}
+#         )
+#         if response.get("success"):
+#
+#             await db[COLLECTION_ROOMS].update_one(
+#                 {"devices.id": device_id},
+#                 {"$set": {"devices.$.states.switch_3": "OFF"}}
+#             )
+#
+#             return {"message": f"Device {device_id} switched successfully."}
+#         else:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail=f"Error switching device {device_id}: {response.get('msg')}"
+#             )
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Internal error: {str(e)}"
+#         )

@@ -214,15 +214,16 @@ async def central_monitor_websocket(websocket: WebSocket):
                             {
                                 "id": device["id"],
                                 "name": device["name"],
-                                "category_name": device["category_name"],
-                                "category": device["category"],
+                                "category_name": device.get("category_name", ""),
+                                "category": device.get("category", ""),
                                 "states": {
                                     "do_not_disturb": (device.get("states") or {}).get("switch_1", "OFF"),
                                     "cleaning": (device.get("states") or {}).get("switch_2", "OFF"),
                                     "bell": (device.get("states") or {}).get("switch_3", "OFF")
-                                } if device["name"] == "NH-YM 蓝牙mesh 2L 单零火-vdevo" else device["states"]
+                                }
                             }
-                            for device in room["devices"]
+                            for device in room.get("devices", [])
+                            if device["name"].startswith("Interruptor Quarto")
                         ],
                     }
                     for room in rooms
