@@ -33,7 +33,7 @@ This project helps validate technical decisions, test cloud-based IoT integratio
 - **Database**: MongoDB (Motor AsyncIO)
 - **APIs**: Tuya Cloud APIs  
 - **Authentication**: Tuya OAuth 2.0 (token-based)  
-- **Real-time Communication**: WebSocket (FastAPI WebSocket on backend, Socket.IO on frontend)
+- **Real-time Communication**: WebSocket (native WebSocket API)
 - **UI Framework**: Material-UI (MUI)
 - **HTTP Client**: Axios
 - **Data Format**: JSON for API communication  
@@ -334,7 +334,7 @@ O projeto ajuda a validar decisões técnicas, testar a integração com infraes
 - **Banco de Dados**: MongoDB (Motor AsyncIO)
 - **APIs**: Tuya Cloud APIs  
 - **Autenticação**: OAuth 2.0 da Tuya (baseada em token)  
-- **Comunicação em Tempo Real**: WebSocket (FastAPI WebSocket no backend, Socket.IO no frontend)
+- **Comunicação em Tempo Real**: WebSocket (API WebSocket nativa)
 - **Framework UI**: Material-UI (MUI)
 - **Cliente HTTP**: Axios
 - **Formato de Dados**: JSON (para comunicação via API)  
