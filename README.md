@@ -33,7 +33,7 @@ This project helps validate technical decisions, test cloud-based IoT integratio
 - **Database**: MongoDB (Motor AsyncIO)
 - **APIs**: Tuya Cloud APIs  
 - **Authentication**: Tuya OAuth 2.0 (token-based)  
-- **Real-time Communication**: WebSocket (Socket.IO)
+- **Real-time Communication**: WebSocket (FastAPI WebSocket on backend, Socket.IO on frontend)
 - **UI Framework**: Material-UI (MUI)
 - **HTTP Client**: Axios
 - **Data Format**: JSON for API communication  
@@ -92,8 +92,10 @@ cd TuyaHotel
 
 ```bash
 # Install Python dependencies
-pip install fastapi uvicorn motor python-dotenv tuya-connector-python websockets
+pip install fastapi uvicorn motor python-dotenv tuya-connector-python
 ```
+
+**Note:** Consider creating a `requirements.txt` file for better dependency management.
 
 ### 3. Install Frontend Dependencies
 
@@ -171,10 +173,15 @@ The frontend will be available at `http://localhost:3000`
 
 ### Testing with Mock API
 
-The project includes a mock Tuya API for testing without actual devices:
+The project includes a mock Tuya API for testing without actual devices. In `server/main.py`, you'll find two lines near the top of the file:
 
-- Uncomment line 40 in `server/main.py` to use `MockTuyaAPI()`
-- Comment out line 39 to disable the real Tuya API
+```python
+# openapi = initialize_tuya_openapi()
+openapi = MockTuyaAPI()
+```
+
+- To use the mock API (default), keep it as shown above
+- To use the real Tuya API, swap the comments (uncomment the first line and comment the second)
 
 ---
 
@@ -327,7 +334,7 @@ O projeto ajuda a validar decisões técnicas, testar a integração com infraes
 - **Banco de Dados**: MongoDB (Motor AsyncIO)
 - **APIs**: Tuya Cloud APIs  
 - **Autenticação**: OAuth 2.0 da Tuya (baseada em token)  
-- **Comunicação em Tempo Real**: WebSocket (Socket.IO)
+- **Comunicação em Tempo Real**: WebSocket (FastAPI WebSocket no backend, Socket.IO no frontend)
 - **Framework UI**: Material-UI (MUI)
 - **Cliente HTTP**: Axios
 - **Formato de Dados**: JSON (para comunicação via API)  
@@ -386,8 +393,10 @@ cd TuyaHotel
 
 ```bash
 # Instalar dependências Python
-pip install fastapi uvicorn motor python-dotenv tuya-connector-python websockets
+pip install fastapi uvicorn motor python-dotenv tuya-connector-python
 ```
+
+**Nota:** Considere criar um arquivo `requirements.txt` para melhor gerenciamento de dependências.
 
 ### 3. Instalar Dependências do Frontend
 
@@ -465,10 +474,15 @@ O frontend estará disponível em `http://localhost:3000`
 
 ### Testando com API Mock
 
-O projeto inclui uma API Tuya mock para testes sem dispositivos reais:
+O projeto inclui uma API Tuya mock para testes sem dispositivos reais. No arquivo `server/main.py`, você encontrará duas linhas no início do arquivo:
 
-- Descomente a linha 40 em `server/main.py` para usar `MockTuyaAPI()`
-- Comente a linha 39 para desabilitar a API Tuya real
+```python
+# openapi = initialize_tuya_openapi()
+openapi = MockTuyaAPI()
+```
+
+- Para usar a API mock (padrão), mantenha como mostrado acima
+- Para usar a API Tuya real, troque os comentários (descomente a primeira linha e comente a segunda)
 
 ---
 
